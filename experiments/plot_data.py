@@ -25,11 +25,11 @@ def plot_conditional_distributions(n_samples: int = 500, seed: int = 42):
     fig, ax = plt.subplots(figsize=(8, 6))
     
     # Plot both distributions on same axes
-    ax.scatter(X_y, Y, alpha=0.6, s=30, c='blue', marker='o', label='P')
-    ax.scatter(X_z, Z, alpha=0.6, s=30, c='red', marker='s', label='Q')
+    ax.scatter(X_y, Y, alpha=0.6, s=30, c='blue', marker='o', label='$P$')
+    ax.scatter(X_z, Z, alpha=0.6, s=30, c='red', marker='s', label='$Q$')
     
-    ax.set_xlabel('X', fontsize=20)
-    ax.set_ylabel('Y', fontsize=20)
+    ax.set_xlabel('$X$', fontsize=20)
+    ax.set_ylabel('$Y$, $Z$', fontsize=20)
     ax.set_title('Simulated Data', fontsize=24)
     ax.legend(fontsize=20)
     ax.grid(True, alpha=0.3)
@@ -39,7 +39,7 @@ def plot_conditional_distributions(n_samples: int = 500, seed: int = 42):
     # Save figure
     output_dir = Path(__file__).parent.parent / 'figs'
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / 'conditional_distributions.pdf'
+    output_path = output_dir / 'synthetic_data_plot.pdf'
     plt.savefig(output_path, bbox_inches='tight')
     print(f"Figure saved to: {output_path}")
     
