@@ -186,7 +186,7 @@ def plot_test_statistics(
     )
     
     # Add labels and title
-    ax.set_xlabel('log(CMMD$^2(P_{Y|X}, Q_{Z|X})$)', fontsize=20)
+    ax.set_xlabel('CMMD$^2(P_{Y|X}, Q_{Z|X})$', fontsize=20)
     ax.set_ylabel('Frequency', fontsize=20)
     ax.set_title('Distribution of Test Statistic',
                  fontsize=24)
@@ -202,8 +202,8 @@ def plot_test_statistics(
 
 if __name__ == '__main__':
     # Setting
-    setting="diff_marginal"
     # setting="same_marginal"
+    setting="diff_marginal"
 
     # Run experiment
     cmmd0_stats, cmmd1_stats, cmmd2_stats = run_cmmd_experiment(

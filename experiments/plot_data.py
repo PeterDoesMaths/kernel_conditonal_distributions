@@ -22,8 +22,8 @@ def plot_conditional_distributions(setting: str = 'diff_marginal', n_samples: in
         X_P, Y = sample_joint(n_samples, sample_covariate, conditional_y,  noise_std=noise_std, seed=seed)
         X_Q, Z = sample_joint(n_samples, sample_covariate, conditional_z, noise_std=noise_std, seed=seed+1)
     elif setting == 'diff_marginal':
-        X_P, Y = sample_joint(n_samples, sample_covariate_p, conditional_y,  noise_std=noise_std, seed=seed)
-        X_Q, Z = sample_joint(n_samples, sample_covariate_q, conditional_z, noise_std=noise_std, seed=seed+1)
+        X_P, Y = sample_joint(n_samples, sample_covariate_p, conditional_y,  noise_std=noise_std, seed=seed+1)
+        X_Q, Z = sample_joint(n_samples, sample_covariate_q, conditional_z, noise_std=noise_std, seed=seed+3)
     
     # Create figure
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -52,4 +52,6 @@ def plot_conditional_distributions(setting: str = 'diff_marginal', n_samples: in
 
 
 if __name__ == '__main__':
-    plot_conditional_distributions()
+    # setting = 'same_marginal'
+    setting = 'diff_marginal'
+    plot_conditional_distributions(setting=setting)

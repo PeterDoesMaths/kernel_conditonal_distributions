@@ -117,7 +117,7 @@ def conditional_z(X: np.ndarray, noise_std: float = 0.5, seed: int = None) -> np
 
 def sample_joint(
     n: int,
-    mariginal_fn: Callable,
+    marginal_fn: Callable,
     conditional_fn: Callable,
     noise_std: float = 0.5,
     seed: int = None
@@ -147,7 +147,7 @@ def sample_joint(
     seed_x = rng.integers(0, 2**31)
     seed_y = rng.integers(0, 2**31)
     
-    X = mariginal_fn(n, seed=seed_x)
+    X = marginal_fn(n, seed=seed_x)
     Y = conditional_fn(X, noise_std=noise_std, seed=seed_y)
     
     return X, Y

@@ -40,7 +40,7 @@ def run_power_experiment(
 
 	if setting == "same_marginal":
 		algo = Test_Same_Marginal()
-	else:
+	if setting == "diff_marginal":
 		algo = Test_Diff_Marginal()
 
 	rng = np.random.default_rng(seed)
@@ -126,6 +126,13 @@ def run_power_experiment(
 			reject1 += int(p1 < alpha)
 			reject2 += int(p2 < alpha)
 
+			# print every 50th trial for progress
+			if (trial + 1) % 50 == 0:
+				print(
+					f"Trial {trial+1:d}/{n_trials:d} for n={n:d}: "
+					f"CMMD0 p-value = {p0:.4f}, CMMD1 p-value = {p1:.4f}, CMMD2 p-value = {p2:.4f}"
+				)
+
 		results_cmmd0[i] = reject0 / n_trials
 		results_cmmd1[i] = reject1 / n_trials
 		results_cmmd2[i] = reject2 / n_trials
@@ -140,7 +147,8 @@ def run_power_experiment(
 def plot_power_vs_sample_size(
 	sample_sizes: list[int],
 	results: dict[str, np.ndarray],
-	error: str = "type1"
+	error: str = "type1",
+	setting: str = "same_marginal"
 ):
 	"""
 	Plot power/type I error vs sample size for CMMD0, CMMD1, and CMMD2.
@@ -157,14 +165,18 @@ def plot_power_vs_sample_size(
 
 	ax.set_xlabel("Sample size ($n$)", fontsize=20)
 	if error == "type1":
+		if setting == "same_marginal":
+			ax.set_title("$P_X = Q_X$", fontsize=20)
+		if setting == "diff_marginal":
+			ax.set_title("$P_X \\neq Q_X$", fontsize=20)
 		ax.set_ylabel("Type I Error", fontsize=20)
-		ax.set_ylim(0.0, 1.1)
+		ax.set_ylim(0.0, 1.0)
+		ax.legend(fontsize=16)
 	if error == "type2":
 		ax.set_ylabel("Power", fontsize=20)
 		ax.set_ylim(0.0, 1.1)
 	ax.tick_params(axis="both", which="major", labelsize=14)
 	ax.grid(True, alpha=0.3)
-	ax.legend(fontsize=16)
 
 	plt.tight_layout()
 
@@ -173,9 +185,11 @@ def plot_power_vs_sample_size(
 
 if __name__ == "__main__":
 	sample_sizes = [10, 50, 100, 150, 200, 250]
-	n_trials = 50 # Change to 250 for final results
-	error = "type2" # Change to "type2" for power results
-	setting = "diff_marginal" # Change to "same_marginal" for same marginal setting
+	n_trials = 250
+	# error = "type1"
+	error = "type2"
+	# setting = "same_marginal"
+	setting = "diff_marginal"
 
 	results = run_power_experiment(
 		error=error,
@@ -191,12 +205,12 @@ if __name__ == "__main__":
 		seed=42,
 	)
 
-	fig, _ = plot_power_vs_sample_size(sample_sizes, results, error=error)
+	fig, _ = plot_power_vs_sample_size(sample_sizes, results, error=error, setting=setting)
 
-	# figs_dir = os.path.join(project_root, "figs")
-	# os.makedirs(figs_dir, exist_ok=True)
-	# fig_path = os.path.join(figs_dir, f"synthetic_{error}_vs_sample_size_{setting}.pdf")
-	# fig.savefig(fig_path, dpi=300, bbox_inches="tight")
-	# print(f"Figure saved to: {fig_path}")
+	figs_dir = os.path.join(project_root, "figs")
+	os.makedirs(figs_dir, exist_ok=True)
+	fig_path = os.path.join(figs_dir, f"synthetic_{error}_vs_sample_size_{setting}.pdf")
+	fig.savefig(fig_path, dpi=300, bbox_inches="tight")
+	print(f"Figure saved to: {fig_path}")
 
 	plt.show()
