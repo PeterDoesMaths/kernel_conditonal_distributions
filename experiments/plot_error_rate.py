@@ -207,9 +207,9 @@ if __name__ == "__main__":
 
 	fig, _ = plot_power_vs_sample_size(sample_sizes, results, error=error, setting=setting)
 
-	figs_dir = os.path.join(project_root, "figs")
+	figs_dir = os.path.join(project_root, "figs/synthetic")
 	os.makedirs(figs_dir, exist_ok=True)
-	fig_path = os.path.join(figs_dir, f"synthetic_{error}_vs_sample_size_{setting}.pdf")
+	fig_path = os.path.join(figs_dir, f"{error}_vs_sample_size_{setting}.pdf")
 	fig.savefig(fig_path, dpi=300, bbox_inches="tight")
 	print(f"Figure saved to: {fig_path}")
 

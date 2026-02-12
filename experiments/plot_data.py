@@ -42,9 +42,9 @@ def plot_conditional_distributions(setting: str = 'diff_marginal', n_samples: in
     plt.tight_layout()
     
     # Save figure
-    output_dir = Path(__file__).parent.parent / 'figs'
+    output_dir = Path(__file__).parent.parent / 'figs/synthetic'
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f'synthetic_data_plot_{setting}.pdf'
+    output_path = output_dir / f'data_plot_{setting}.pdf'
     plt.savefig(output_path, bbox_inches='tight')
     print(f"Figure saved to: {output_path}")
     

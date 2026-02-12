@@ -220,7 +220,7 @@ if __name__ == '__main__':
     fig, ax = plot_test_statistics(cmmd0_stats, cmmd1_stats, cmmd2_stats)
     
     # Save figure (use absolute path)
-    figs_dir = os.path.join(script_dir, '..', 'figs')
+    figs_dir = os.path.join(script_dir, '..', 'figs/synthetic')
     os.makedirs(figs_dir, exist_ok=True)
     fig_path = os.path.join(figs_dir, f'cmmd_test_statistics_{setting}.pdf')
     fig.savefig(fig_path, dpi=300, bbox_inches='tight')
