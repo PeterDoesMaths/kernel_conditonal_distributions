@@ -1,5 +1,5 @@
 """
-Generate and plot CMMD1 test statistics from conditional distributions.
+Generate and plot CMMD test statistics from conditional distributions.
 """
 
 import numpy as np
@@ -25,7 +25,7 @@ def run_cmmd_experiment(
     bandwidth: float = 0.1,
     noise_std: float = 0.3,
     cmmd2_estimator: str = "jmmd"
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Run multiple trials of CMMD0, CMMD1, and CMMD2 test statistic computation.
     
@@ -199,11 +199,11 @@ if __name__ == '__main__':
     fig, ax = plot_test_statistics(cmmd0_stats, cmmd1_stats, cmmd2_stats)
     
     # Save figure (use absolute path)
-    figs_dir = os.path.join(script_dir, '..', 'figs')
-    os.makedirs(figs_dir, exist_ok=True)
-    fig_path = os.path.join(figs_dir, 'cmmd_test_statistics.pdf')
-    fig.savefig(fig_path, dpi=300, bbox_inches='tight')
-    print(f"\nFigure saved to: {fig_path}")
+    # figs_dir = os.path.join(script_dir, '..', 'figs')
+    # os.makedirs(figs_dir, exist_ok=True)
+    # fig_path = os.path.join(figs_dir, 'cmmd_test_statistics.pdf')
+    # fig.savefig(fig_path, dpi=300, bbox_inches='tight')
+    # print(f"\nFigure saved to: {fig_path}")
     
     # Display plot
-    # plt.show()
+    plt.show()

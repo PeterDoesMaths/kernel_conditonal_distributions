@@ -321,11 +321,9 @@ class Algorithm(ABC):
         pass
 
 
-class AlgorithmV1(Algorithm):
+class Test_Same_Marginal(Algorithm):
     """
-    First algorithm for hypothesis testing (template).
-    
-    To be implemented based on your specific method.
+    Kernel two-sample test for conditional distribution (P_X = Q_X).
     """
     
     def test(
@@ -339,11 +337,67 @@ class AlgorithmV1(Algorithm):
         **kwargs
     ) -> Tuple[float, float]:
         """
-        Perform hypothesis test using Algorithm V1.
-        
-        This is a template - implement your specific algorithm here.
+        Kernel two-sample test for conditional distribution (P_X = Q_X).
         """
-        raise NotImplementedError("Implement your specific algorithm here.")
+        alpha = float(kwargs.get("alpha", 0.05))
+        B = int(kwargs.get("B", 1000))
+        lam_p = float(kwargs.get("lam_p", kwargs.get("lam", 1e-3)))
+        lam_q = float(kwargs.get("lam_q", kwargs.get("lam", 1e-3)))
+        rng = np.random.default_rng(kwargs.get("random_state", None))
+
+        # Avoid passing algorithm-only arguments into the test statistic.
+        stat_kwargs = dict(kwargs)
+        for key in ("alpha", "B", "lam_p", "lam_q", "lam", "random_state"):
+            stat_kwargs.pop(key, None)
+
+        # Compute test statistic on original data
+        stat = test_statistic.compute(
+            X_P,
+            Y,
+            X_Q,
+            Z,
+            lam_p,
+            lam_q,
+            kernel_fn,
+            **stat_kwargs,
+        )
+
+        X_all = np.vstack([X_P, X_Q])
+        Y_all = np.vstack([Y, Z])
+        n = X_P.shape[0]
+        total = X_all.shape[0]
+
+        # Bootstrap/permutation under same-marginal null
+        stats_boot = np.zeros(B, dtype=float)
+        indices = np.arange(total)
+        for b in range(B):
+            idx_p = rng.choice(indices, size=n, replace=False)
+            mask_p = np.zeros(total, dtype=bool)
+            mask_p[idx_p] = True
+            idx_q = indices[~mask_p]
+
+            X_P_b = X_all[idx_p]
+            Y_b = Y_all[idx_p]
+            X_Q_b = X_all[idx_q]
+            Z_b = Y_all[idx_q]
+
+            stats_boot[b] = test_statistic.compute(
+                X_P_b,
+                Y_b,
+                X_Q_b,
+                Z_b,
+                lam_p,
+                lam_q,
+                kernel_fn,
+                **stat_kwargs,
+            )
+
+        p_value = (1.0 + np.sum(stats_boot > stat)) / (1.0 + B)
+
+        # Decision is p_value < alpha (not returned, but computed for callers)
+        _ = p_value < alpha
+
+        return float(stat), float(p_value)
 
 
 class AlgorithmV2(Algorithm):
