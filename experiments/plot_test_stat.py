@@ -176,6 +176,7 @@ def plot_test_statistics(
     ax.set_title('Distribution of Test Statistic',
                  fontsize=24)
     ax.set_xscale('log')
+    ax.tick_params(axis="both", which="major", labelsize=14)
     ax.legend(fontsize=16, loc=(0.6, 0.75))
     
     ax.grid(True, alpha=0.3)
@@ -187,11 +188,12 @@ def plot_test_statistics(
 if __name__ == '__main__':
     # Run experiment
     cmmd0_stats, cmmd1_stats, cmmd2_stats = run_cmmd_experiment(
-        n_trials=500,
-        n_samples=500,
+        n_trials=250,
+        n_samples=250,
         lam_p=0.1,
         lam_q=0.1,
         bandwidth=0.1,
+        noise_std=0.5,
         cmmd2_estimator="jmmd"
     )
     
@@ -199,11 +201,11 @@ if __name__ == '__main__':
     fig, ax = plot_test_statistics(cmmd0_stats, cmmd1_stats, cmmd2_stats)
     
     # Save figure (use absolute path)
-    # figs_dir = os.path.join(script_dir, '..', 'figs')
-    # os.makedirs(figs_dir, exist_ok=True)
-    # fig_path = os.path.join(figs_dir, 'cmmd_test_statistics.pdf')
-    # fig.savefig(fig_path, dpi=300, bbox_inches='tight')
-    # print(f"\nFigure saved to: {fig_path}")
+    figs_dir = os.path.join(script_dir, '..', 'figs')
+    os.makedirs(figs_dir, exist_ok=True)
+    fig_path = os.path.join(figs_dir, 'cmmd_test_statistics.pdf')
+    fig.savefig(fig_path, dpi=300, bbox_inches='tight')
+    print(f"\nFigure saved to: {fig_path}")
     
     # Display plot
     plt.show()

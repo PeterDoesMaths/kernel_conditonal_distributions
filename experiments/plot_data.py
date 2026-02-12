@@ -13,13 +13,13 @@ sys.path.append(str(Path(__file__).parent.parent))
 from src.models import sample_joint, conditional_y, conditional_z
 
 
-def plot_conditional_distributions(n_samples: int = 500, seed: int = 42):
+def plot_conditional_distributions(n_samples: int = 250, noise_std: float = 0.5,  seed: int = 42):
     """
     Plot samples from both conditional distributions P_{Y|X} and P_{Z|X}.
     """
     # Sample from both distributions
-    X_y, Y = sample_joint(n_samples, conditional_y, noise_std=0.3, seed=seed)
-    X_z, Z = sample_joint(n_samples, conditional_z, noise_std=0.3, seed=seed+1)
+    X_y, Y = sample_joint(n_samples, conditional_y, noise_std=noise_std, seed=seed)
+    X_z, Z = sample_joint(n_samples, conditional_z, noise_std=noise_std, seed=seed+1)
     
     # Create figure
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -31,6 +31,7 @@ def plot_conditional_distributions(n_samples: int = 500, seed: int = 42):
     ax.set_xlabel('$X$', fontsize=20)
     ax.set_ylabel('$Y$, $Z$', fontsize=20)
     ax.set_title('Simulated Data', fontsize=24)
+    ax.tick_params(axis="both", which="major", labelsize=14)
     ax.legend(fontsize=20)
     ax.grid(True, alpha=0.3)
     
@@ -43,7 +44,7 @@ def plot_conditional_distributions(n_samples: int = 500, seed: int = 42):
     plt.savefig(output_path, bbox_inches='tight')
     print(f"Figure saved to: {output_path}")
     
-    # plt.show()
+    plt.show()
 
 
 if __name__ == '__main__':

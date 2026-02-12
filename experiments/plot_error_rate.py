@@ -57,7 +57,11 @@ def run_power_experiment(
 			seed_perm = int(rng.integers(1, 2**31))
 
 			X_P, Y = sample_joint(n, conditional_y, noise_std=noise_std, seed=seed_y)
-			X_Q, Z = sample_joint(n, conditional_z, noise_std=noise_std, seed=seed_z)
+			# X_Q, Z = sample_joint(n, conditional_z, noise_std=noise_std, seed=seed_z)
+			if error == "type1":
+				X_Q, Z = sample_joint(n, conditional_y, noise_std=noise_std, seed=seed_z)
+			else:
+				X_Q, Z = sample_joint(n, conditional_z, noise_std=noise_std, seed=seed_z)
 
 			X_P = X_P.reshape(-1, 1)
 			Y = Y.reshape(-1, 1)
@@ -125,23 +129,28 @@ def run_power_experiment(
 
 def plot_power_vs_sample_size(
 	sample_sizes: list[int],
-	power_results: dict[str, np.ndarray]
+	power_results: dict[str, np.ndarray],
+	error: str = "Power"
 ):
 	"""
-	Plot power vs sample size for CMMD0, CMMD1, and CMMD2.
+	Plot power/type I error vs sample size for CMMD0, CMMD1, and CMMD2.
 	"""
 	fig, ax = plt.subplots(figsize=(8, 6))
 
-	ax.plot(sample_sizes, power_results["cmmd0"], marker="o", label="CMMD0")
-	ax.plot(sample_sizes, power_results["cmmd1"], marker="s", label="CMMD1")
-	ax.plot(sample_sizes, power_results["cmmd2"], marker="^", label="CMMD2")
+	ax.plot(sample_sizes, power_results["cmmd0"], marker="o", label="CMMD$_0$")
+	ax.plot(sample_sizes, power_results["cmmd1"], marker="s", label="CMMD$_1$")
+	ax.plot(sample_sizes, power_results["cmmd2"], marker="^", label="CMMD$_2$")
 
-	ax.set_xlabel("Sample size", fontsize=18)
-	ax.set_ylabel("Power", fontsize=18)
-	# ax.set_title("Power vs Sample Size", fontsize=22)
-	ax.set_ylim(0.0, 1.1)
+	ax.set_xlabel("Sample size ($n$)", fontsize=20)
+	if error == "Power":
+		ax.set_ylabel("Power", fontsize=20)
+		ax.set_ylim(0.0, 1.1)
+	else:
+		ax.set_ylabel("Type I Error", fontsize=20)
+		ax.set_ylim(0.0, 1.1)
+	ax.tick_params(axis="both", which="major", labelsize=14)
 	ax.grid(True, alpha=0.3)
-	ax.legend(fontsize=14)
+	ax.legend(fontsize=16)
 
 	plt.tight_layout()
 
@@ -149,18 +158,19 @@ def plot_power_vs_sample_size(
 
 
 if __name__ == "__main__":
-	sample_sizes = [10, 50, 100, 200, 350, 500]
-	n_trials = 100
+	sample_sizes = [10, 50, 100, 150, 200, 250]
+	n_trials = 100 # Change to 250 for final results
+	error = "Power" # Change to "type1" for type I error results
 
 	power_results = run_power_experiment(
 		sample_sizes=sample_sizes,
 		n_trials=n_trials,
 		alpha=0.05,
-		B=200,
+		B=250,
 		lam_p=0.1,
 		lam_q=0.1,
 		bandwidth=0.1,
-		noise_std=0.3,
+		noise_std=0.5,
 		cmmd2_estimator="jmmd",
 		seed=42,
 	)
