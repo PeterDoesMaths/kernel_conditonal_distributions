@@ -14,7 +14,7 @@ sys.path.insert(0, project_root)
 
 from src.cmmd import CMMD0, CMMD1, CMMD2
 from src.kernels import gaussian_kernel, median_heuristic
-from src.models import sample_joint, conditional_y, conditional_z
+from src.models import sample_joint, sample_covariate, sample_covariate_p, sample_covariate_q, conditional_y, conditional_z
 
 
 def run_cmmd_experiment(
@@ -24,7 +24,8 @@ def run_cmmd_experiment(
     lam_q: float = 0.01,
     bandwidth: float = 0.1,
     noise_std: float = 0.3,
-    cmmd2_estimator: str = "jmmd"
+    cmmd2_estimator: str = "jmmd",
+    setting: str = "diff_marginal"
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Run multiple trials of CMMD0, CMMD1, and CMMD2 test statistic computation.
@@ -45,6 +46,8 @@ def run_cmmd_experiment(
         Standard deviation of noise in data generation.
     cmmd2_estimator : str, default="cmmd"
         CMMD2 estimator to use ("cmmd" or "jmmd").
+    setting : str, default="diff_marginal"
+        Setting for marginal distributions ("same_marginal" or "diff_marginal").
     
     Returns
     -------
@@ -76,12 +79,24 @@ def run_cmmd_experiment(
     # Run trials
     for trial in range(n_trials):
         # Generate data from two conditional distributions
+        # Select marginal distributions based on setting
+        if setting == 'same_marginal':
+            marginal_p = sample_covariate
+            marginal_q = sample_covariate
+            cmmd2_estimator = "jmmd"
+        elif setting == 'diff_marginal':
+            marginal_p = sample_covariate_p
+            marginal_q = sample_covariate_q
+            cmmd2_estimator = "cmmd"
+        else:
+            raise ValueError(f"Unknown setting: {setting}. Must be 'same_marginal' or 'diff_marginal'.")
+        
         # P: Y|X
-        X_P, Y = sample_joint(n_samples, conditional_y, noise_std=noise_std, 
+        X_P, Y = sample_joint(n_samples, marginal_p, conditional_y, noise_std=noise_std, 
                                seed=trial*2)
         
         # Q: Z|X
-        X_Q, Z = sample_joint(n_samples, conditional_z, noise_std=noise_std, 
+        X_Q, Z = sample_joint(n_samples, marginal_q, conditional_z, noise_std=noise_std, 
                                seed=trial*2 + 1)
         
         # Ensure data is 2D for kernel computation
@@ -186,6 +201,10 @@ def plot_test_statistics(
 
 
 if __name__ == '__main__':
+    # Setting
+    setting="diff_marginal"
+    # setting="same_marginal"
+
     # Run experiment
     cmmd0_stats, cmmd1_stats, cmmd2_stats = run_cmmd_experiment(
         n_trials=250,
@@ -194,7 +213,7 @@ if __name__ == '__main__':
         lam_q=0.1,
         bandwidth=0.1,
         noise_std=0.5,
-        cmmd2_estimator="jmmd"
+        setting=setting
     )
     
     # Plot results
@@ -203,7 +222,7 @@ if __name__ == '__main__':
     # Save figure (use absolute path)
     figs_dir = os.path.join(script_dir, '..', 'figs')
     os.makedirs(figs_dir, exist_ok=True)
-    fig_path = os.path.join(figs_dir, 'cmmd_test_statistics.pdf')
+    fig_path = os.path.join(figs_dir, f'cmmd_test_statistics_{setting}.pdf')
     fig.savefig(fig_path, dpi=300, bbox_inches='tight')
     print(f"\nFigure saved to: {fig_path}")
     

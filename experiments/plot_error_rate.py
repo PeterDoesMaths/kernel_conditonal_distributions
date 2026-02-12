@@ -12,9 +12,9 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 sys.path.insert(0, project_root)
 
-from src.cmmd import CMMD0, CMMD1, CMMD2, Test_Same_Marginal
+from src.cmmd import CMMD0, CMMD1, CMMD2, Test_Same_Marginal, Test_Diff_Marginal
 from src.kernels import gaussian_kernel, median_heuristic
-from src.models import sample_joint, conditional_y, conditional_z
+from src.models import sample_joint, sample_covariate, sample_covariate_p, sample_covariate_q, conditional_y, conditional_z, propensity
 
 
 def run_power_experiment(
@@ -28,15 +28,20 @@ def run_power_experiment(
 	bandwidth: float | None = 0.1,
 	noise_std: float = 0.3,
 	cmmd2_estimator: str = "jmmd",
+	setting: str = "diff_marginal",
 	seed: int = 42
 ) -> dict[str, np.ndarray]:
 	"""
 	Estimate power (rejection rate) across sample sizes for CMMD tests.
 	"""
-	algo = Test_Same_Marginal()
 	cmmd0_stat = CMMD0()
 	cmmd1_stat = CMMD1()
 	cmmd2_stat = CMMD2()
+
+	if setting == "same_marginal":
+		algo = Test_Same_Marginal()
+	else:
+		algo = Test_Diff_Marginal()
 
 	rng = np.random.default_rng(seed)
 
@@ -57,59 +62,64 @@ def run_power_experiment(
 			seed_z = int(rng.integers(1, 2**31))
 			seed_perm = int(rng.integers(1, 2**31))
 
-			X_P, Y = sample_joint(n, conditional_y, noise_std=noise_std, seed=seed_y)
+			# Select marginal distributions based on setting
+			if setting == 'same_marginal':
+				marginal_p = sample_covariate
+				marginal_q = sample_covariate
+				cmmd2_estimator = "jmmd"
+			elif setting == 'diff_marginal':
+				marginal_p = sample_covariate_p
+				marginal_q = sample_covariate_q
+				cmmd2_estimator = "cmmd"
+			else:
+				raise ValueError(f"Unknown setting: {setting}. Must be 'same_marginal' or 'diff_marginal'.")
+
+			X_P, Y = sample_joint(n, marginal_p, conditional_y, noise_std=noise_std, seed=seed_y)
 			if error == "type1":
-				X_Q, Z = sample_joint(n, conditional_y, noise_std=noise_std, seed=seed_z)
+				X_Q, Z = sample_joint(n, marginal_q, conditional_y, noise_std=noise_std, seed=seed_z)
 			if error == "type2":
-				X_Q, Z = sample_joint(n, conditional_z, noise_std=noise_std, seed=seed_z)
+				X_Q, Z = sample_joint(n, marginal_q, conditional_z, noise_std=noise_std, seed=seed_z)
 
 			X_P = X_P.reshape(-1, 1)
 			Y = Y.reshape(-1, 1)
 			X_Q = X_Q.reshape(-1, 1)
 			Z = Z.reshape(-1, 1)
 
+			# Prepare kwargs for test method
+			algo_kwargs = {
+				"alpha": alpha,
+				"B": B,
+				"lam_p": lam_p,
+				"lam_q": lam_q,
+				"random_state": seed_perm,
+			}
+			stat_kwargs = {
+				"bandwidth": bandwidth,
+			}
+			# Add propensity function if using different marginals
+			if setting == "diff_marginal":
+				algo_kwargs["propensity_fn"] = propensity
+
 			_, p0 = algo.test(
-				X_P,
-				Y,
-				X_Q,
-				Z,
+				X_P, Y, X_Q, Z,
 				cmmd0_stat,
 				gaussian_kernel,
-				alpha=alpha,
-				B=B,
-				lam_p=lam_p,
-				lam_q=lam_q,
-				bandwidth=bandwidth,
-				random_state=seed_perm,
+				algo_kwargs=algo_kwargs,
+				stat_kwargs=stat_kwargs,
 			)
 			_, p1 = algo.test(
-				X_P,
-				Y,
-				X_Q,
-				Z,
+				X_P, Y, X_Q, Z,
 				cmmd1_stat,
 				gaussian_kernel,
-				alpha=alpha,
-				B=B,
-				lam_p=lam_p,
-				lam_q=lam_q,
-				bandwidth=bandwidth,
-				random_state=seed_perm + 1,
+				algo_kwargs={**algo_kwargs, "random_state": seed_perm + 1},
+				stat_kwargs=stat_kwargs,
 			)
 			_, p2 = algo.test(
-				X_P,
-				Y,
-				X_Q,
-				Z,
+				X_P, Y, X_Q, Z,
 				cmmd2_stat,
 				gaussian_kernel,
-				alpha=alpha,
-				B=B,
-				lam_p=lam_p,
-				lam_q=lam_q,
-				bandwidth=bandwidth,
-				estimator=cmmd2_estimator,
-				random_state=seed_perm + 2,
+				algo_kwargs={**algo_kwargs, "random_state": seed_perm + 2},
+				stat_kwargs={**stat_kwargs, "estimator": cmmd2_estimator},
 			)
 
 			reject0 += int(p0 < alpha)
@@ -163,8 +173,9 @@ def plot_power_vs_sample_size(
 
 if __name__ == "__main__":
 	sample_sizes = [10, 50, 100, 150, 200, 250]
-	n_trials = 100 # Change to 250 for final results
-	error = "type1" # Change to "type2" for power results
+	n_trials = 50 # Change to 250 for final results
+	error = "type2" # Change to "type2" for power results
+	setting = "diff_marginal" # Change to "same_marginal" for same marginal setting
 
 	results = run_power_experiment(
 		error=error,
@@ -176,19 +187,16 @@ if __name__ == "__main__":
 		lam_q=0.1,
 		bandwidth=0.1,
 		noise_std=0.5,
-		cmmd2_estimator="jmmd",
+		setting=setting,
 		seed=42,
 	)
 
 	fig, _ = plot_power_vs_sample_size(sample_sizes, results, error=error)
 
-	figs_dir = os.path.join(project_root, "figs")
-	os.makedirs(figs_dir, exist_ok=True)
-	if error == "type1":
-		fig_path = os.path.join(figs_dir, "type1_error_vs_sample_size.pdf")
-	if error == "type2":
-		fig_path = os.path.join(figs_dir, "power_vs_sample_size.pdf")
-	fig.savefig(fig_path, dpi=300, bbox_inches="tight")
-	print(f"Figure saved to: {fig_path}")
+	# figs_dir = os.path.join(project_root, "figs")
+	# os.makedirs(figs_dir, exist_ok=True)
+	# fig_path = os.path.join(figs_dir, f"synthetic_{error}_vs_sample_size_{setting}.pdf")
+	# fig.savefig(fig_path, dpi=300, bbox_inches="tight")
+	# print(f"Figure saved to: {fig_path}")
 
 	plt.show()

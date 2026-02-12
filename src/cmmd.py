@@ -289,7 +289,8 @@ class Algorithm(ABC):
         Z: np.ndarray,
         test_statistic: TestStatistic,
         kernel_fn: Callable,
-        **kwargs
+        algo_kwargs: dict | None = None,
+        stat_kwargs: dict | None = None
     ) -> Tuple[float, float]:
         """
         Perform hypothesis test.
@@ -308,8 +309,10 @@ class Algorithm(ABC):
             The test statistic to use.
         kernel_fn : callable
             Kernel function k(X, Y, **kwargs).
-        **kwargs
-            Additional arguments (bandwidth, significance level, etc.).
+        algo_kwargs : dict, optional
+            Algorithm-level parameters (alpha, B, lam_p, lam_q, random_state, etc.).
+        stat_kwargs : dict, optional
+            Test-statistic/kernel parameters (bandwidth, estimator, etc.).
         
         Returns
         -------
@@ -325,7 +328,7 @@ class Test_Same_Marginal(Algorithm):
     """
     Kernel two-sample test for conditional distribution (P_X = Q_X).
     """
-    
+
     def test(
         self,
         X_P: np.ndarray,
@@ -334,21 +337,20 @@ class Test_Same_Marginal(Algorithm):
         Z: np.ndarray,
         test_statistic: TestStatistic,
         kernel_fn: Callable,
-        **kwargs
+        algo_kwargs: dict | None = None,
+        stat_kwargs: dict | None = None
     ) -> Tuple[float, float]:
         """
         Kernel two-sample test for conditional distribution (P_X = Q_X).
         """
-        alpha = float(kwargs.get("alpha", 0.05))
-        B = int(kwargs.get("B", 1000))
-        lam_p = float(kwargs.get("lam_p", kwargs.get("lam", 1e-3)))
-        lam_q = float(kwargs.get("lam_q", kwargs.get("lam", 1e-3)))
-        rng = np.random.default_rng(kwargs.get("random_state", None))
+        algo_kwargs = algo_kwargs or {}
+        stat_kwargs = stat_kwargs or {}
 
-        # Avoid passing algorithm-only arguments into the test statistic.
-        stat_kwargs = dict(kwargs)
-        for key in ("alpha", "B", "lam_p", "lam_q", "lam", "random_state"):
-            stat_kwargs.pop(key, None)
+        alpha = float(algo_kwargs.get("alpha", 0.05))
+        B = int(algo_kwargs.get("B", 1000))
+        lam_p = float(algo_kwargs.get("lam_p", algo_kwargs.get("lam", 1e-3)))
+        lam_q = float(algo_kwargs.get("lam_q", algo_kwargs.get("lam", 1e-3)))
+        rng = np.random.default_rng(algo_kwargs.get("random_state", None))
 
         # Compute test statistic on original data
         stat = test_statistic.compute(
@@ -400,11 +402,12 @@ class Test_Same_Marginal(Algorithm):
         return float(stat), float(p_value)
 
 
-class AlgorithmV2(Algorithm):
+class Test_Diff_Marginal(Algorithm):
     """
-    Second algorithm for hypothesis testing (template).
+    Kernel two-sample test for conditional distribution (P_X != Q_X).
     
-    To be implemented based on your specific method.
+    Uses propensity score-based bootstrap for the case where marginal distributions
+    of X differ between the two groups.
     """
     
     def test(
@@ -415,14 +418,111 @@ class AlgorithmV2(Algorithm):
         Z: np.ndarray,
         test_statistic: TestStatistic,
         kernel_fn: Callable,
-        **kwargs
+        algo_kwargs: dict | None = None,
+        stat_kwargs: dict | None = None
     ) -> Tuple[float, float]:
         """
-        Perform hypothesis test using Algorithm V2.
-        
-        This is a template - implement your specific algorithm here.
+        Kernel two-sample test for conditional distribution (P_X != Q_X).
         """
-        raise NotImplementedError("Implement your specific algorithm here.")
+        algo_kwargs = algo_kwargs or {}
+        stat_kwargs = stat_kwargs or {}
+
+        alpha = float(algo_kwargs.get("alpha", 0.05))
+        B = int(algo_kwargs.get("B", 1000))
+        lam_p = float(algo_kwargs.get("lam_p", algo_kwargs.get("lam", 1e-3)))
+        lam_q = float(algo_kwargs.get("lam_q", algo_kwargs.get("lam", 1e-3)))
+        propensity_fn = algo_kwargs.get("propensity_fn", None)
+        rng = np.random.default_rng(algo_kwargs.get("random_state", None))
+
+        if propensity_fn is None:
+            raise ValueError("propensity_fn must be provided for Test_Diff_Marginal")
+
+        # Compute test statistic on original data
+        stat = test_statistic.compute(
+            X_P,
+            Y,
+            X_Q,
+            Z,
+            lam_p,
+            lam_q,
+            kernel_fn,
+            **stat_kwargs,
+        )
+
+        n = X_P.shape[0]
+        m = X_Q.shape[0]
+
+        # Bootstrap with propensity score resampling
+        stats_boot = np.zeros(B, dtype=float)
+        
+        # Compute propensity scores
+        e_P = propensity_fn(X_P.flatten())  # P(group=P | X_P)
+        e_Q = propensity_fn(X_Q.flatten())  # P(group=P | X_Q)
+        
+        for b in range(B):
+            # Initialize empty lists for bootstrap samples
+            X_P_b_list = []
+            Y_b_list = []
+            X_Q_b_list = []
+            Z_b_list = []
+            
+            # Resample from P using propensity scores
+            for i in range(n):
+                t_i = rng.binomial(1, e_P[i])  # Bernoulli(e(x_i))
+                if t_i == 1:
+                    X_P_b_list.append(X_P[i])
+                    Y_b_list.append(Y[i])
+                else:
+                    X_Q_b_list.append(X_P[i])
+                    Z_b_list.append(Y[i])
+            
+            # Resample from Q using propensity scores
+            for j in range(m):
+                t_j = rng.binomial(1, e_Q[j])  # Bernoulli(e(x_j'))
+                if t_j == 1:
+                    X_P_b_list.append(X_Q[j])
+                    Y_b_list.append(Z[j])
+                else:
+                    X_Q_b_list.append(X_Q[j])
+                    Z_b_list.append(Z[j])
+            
+            # Only compute statistic if both groups have at least one sample
+            if len(X_P_b_list) > 0 and len(X_Q_b_list) > 0:
+                X_P_b = np.array(X_P_b_list)
+                Y_b = np.array(Y_b_list)
+                X_Q_b = np.array(X_Q_b_list)
+                Z_b = np.array(Z_b_list)
+                
+                # Reshape if needed (ensure 2D)
+                if X_P_b.ndim == 1:
+                    X_P_b = X_P_b.reshape(-1, 1)
+                if Y_b.ndim == 1:
+                    Y_b = Y_b.reshape(-1, 1)
+                if X_Q_b.ndim == 1:
+                    X_Q_b = X_Q_b.reshape(-1, 1)
+                if Z_b.ndim == 1:
+                    Z_b = Z_b.reshape(-1, 1)
+                
+                stats_boot[b] = test_statistic.compute(
+                    X_P_b,
+                    Y_b,
+                    X_Q_b,
+                    Z_b,
+                    lam_p,
+                    lam_q,
+                    kernel_fn,
+                    **stat_kwargs,
+                )
+            else:
+                # If one group is empty, set stat to 0 (or inf for safety)
+                stats_boot[b] = 0.0
+
+        p_value = (1.0 + np.sum(stats_boot > stat)) / (1.0 + B)
+
+        # Decision is p_value < alpha (not returned, but computed for callers)
+        _ = p_value < alpha
+
+        return float(stat), float(p_value)
 
 
 def run_experiment(
@@ -432,7 +532,8 @@ def run_experiment(
     test_statistic: TestStatistic,
     data_generator: Callable,
     kernel_fn: Callable,
-    **kwargs
+    algo_kwargs: dict | None = None,
+    stat_kwargs: dict | None = None
 ) -> np.ndarray:
     """
     Run hypothesis test multiple times and collect results.
@@ -451,8 +552,10 @@ def run_experiment(
         Function that generates (X_P, Y, X_Q, Z) samples.
     kernel_fn : callable
         Kernel function to use.
-    **kwargs
-        Additional arguments passed to algorithm.test().
+    algo_kwargs : dict, optional
+        Algorithm-level parameters passed to algorithm.test().
+    stat_kwargs : dict, optional
+        Test-statistic/kernel parameters passed to algorithm.test().
     
     Returns
     -------
@@ -470,7 +573,8 @@ def run_experiment(
             X_P, Y, X_Q, Z,
             test_statistic,
             kernel_fn,
-            **kwargs
+            algo_kwargs=algo_kwargs,
+            stat_kwargs=stat_kwargs,
         )
         
         results[trial] = [stat, pval]
