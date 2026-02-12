@@ -202,8 +202,8 @@ def plot_test_statistics(
 
 if __name__ == '__main__':
     # Setting
-    # setting="same_marginal"
-    setting="diff_marginal"
+    setting="same_marginal"
+    # setting="diff_marginal"
 
     # Run experiment
     cmmd0_stats, cmmd1_stats, cmmd2_stats = run_cmmd_experiment(

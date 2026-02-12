@@ -186,10 +186,10 @@ def plot_power_vs_sample_size(
 if __name__ == "__main__":
 	sample_sizes = [10, 50, 100, 150, 200, 250]
 	n_trials = 250
-	# error = "type1"
-	error = "type2"
-	# setting = "same_marginal"
-	setting = "diff_marginal"
+	error = "type1"
+	# error = "type2"
+	setting = "same_marginal"
+	# setting = "diff_marginal"
 
 	results = run_power_experiment(
 		error=error,
