@@ -91,3 +91,31 @@ def median_heuristic(X: np.ndarray, Y: Optional[np.ndarray] = None) -> float:
     bandwidth = 1.0 / (median_dist ** 2) if median_dist > 0 else 1.0
     
     return bandwidth
+
+
+def kronecker_delta_kernel(X: np.ndarray, Y: Optional[np.ndarray] = None, **kwargs) -> np.ndarray:
+    """
+    Compute the Kronecker delta kernel matrix.
+    
+    k(x, y) = 1 if x == y else 0
+    
+    Parameters
+    ----------
+    X : np.ndarray, shape (n,)
+        First set of samples.
+    Y : np.ndarray, shape (m,), optional
+        Second set of samples. If None, computes k(X, X).
+    **kwargs
+        Additional arguments (ignored, for compatibility with other kernels).
+    
+    Returns
+    -------
+    K : np.ndarray, shape (n, m) or (n, n)
+        Kernel matrix where K[i, j] = k(X[i], Y[j]).
+    """
+    if Y is None:
+        Y = X
+    
+    K = (X[:, None] == Y[None, :]).astype(float)
+    
+    return K

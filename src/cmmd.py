@@ -270,6 +270,78 @@ class CMMD2(TestStatistic):
         raise ValueError(
             f"Unknown estimator '{estimator}'. Use 'jmmd' or 'cmmd'."
         )
+    
+
+def cme_diff(
+    x_test: np.ndarray,
+    X_P: np.ndarray,
+    Y: np.ndarray,
+    X_Q: np.ndarray,
+    Z: np.ndarray,
+    lam_p: float,
+    lam_q: float,
+    kernel_x: Callable,
+    kernel_y: Callable,
+    norm: bool = True,
+    **kwargs
+) -> np.ndarray:
+    """
+    Evaluate CME difference at test values of x.
+    
+    Parameters
+    ----------
+    x_test : np.ndarray, shape (N,)
+        Test points where CME difference is evaluated.
+    norm : bool, default=True
+        If True, returns ||μ̂_{Y|x} - μ̂_{Z|x}|| (RKHS norm, always non-negative).
+        If False, returns μ̂_{Y|x} - μ̂_{Z|x} (scalar difference, can be negative).
+        For binary outcomes with kronecker delta kernel, this is the difference
+        in conditional probabilities P(Y=1|x) - P(Z=1|x).
+    
+    Returns
+    -------
+    cme_diff : np.ndarray, shape (N,)
+        CME difference at each test point.
+    """
+
+    K_XpXp, K_XqXq, _ = _compute_x_kernels(X_P, X_Q, kernel_x, **kwargs)
+    W_Xp, W_Xq = _compute_w_matrices(K_XpXp, K_XqXq, lam_p, lam_q)
+
+    K_xXp = kernel_x(x_test, X_P, **kwargs) # (N, n)
+    K_xXq = kernel_x(x_test, X_Q, **kwargs) # (N, m)
+    K_Xpx = K_xXp.T # (n, N)
+    K_Xqx = K_xXq.T # (m, N)
+
+    if not norm:
+        # Compute scalar difference: μ̂_{Y|x} - μ̂_{Z|x}
+        # For binary Y with kronecker delta kernel: P(Y=1|x) - P(Z=1|x)
+        Y_flat = Y.flatten()  # (n,)
+        Z_flat = Z.flatten()  # (m,)
+        
+        mu_Y = Y_flat @ W_Xp @ K_Xpx  # (N,)
+        mu_Z = Z_flat @ W_Xq @ K_Xqx  # (N,)
+        
+        cme_diff = mu_Y - mu_Z  # (N,)
+    else:
+        # Compute RKHS norm: ||μ̂_{Y|x} - μ̂_{Z|x}||
+        L_YY, L_ZZ, L_YZ = _compute_yz_kernels(Y, Z, kernel_y, **kwargs)
+        L_ZY = L_YZ.T
+        
+        # Compute intermediate matrices (one column per test point)
+        M1 = W_Xp @ L_YY @ W_Xp @ K_Xpx  # (n, N)
+        M2 = W_Xp @ L_YZ @ W_Xq @ K_Xqx  # (n, N)
+        M3 = W_Xq @ L_ZY @ W_Xp @ K_Xpx  # (m, N)
+        M4 = W_Xq @ L_ZZ @ W_Xq @ K_Xqx  # (m, N)
+
+        term1_diag = np.sum(K_xXp * M1.T, axis=1)  # (N,)
+        term2_diag = np.sum(K_xXp * M2.T, axis=1)  # (N,)
+        term3_diag = np.sum(K_xXq * M3.T, axis=1)  # (N,)
+        term4_diag = np.sum(K_xXq * M4.T, axis=1)  # (N,)
+
+        cme_diff_sq = term1_diag - term2_diag - term3_diag + term4_diag  # (N,)
+        cme_diff = np.sqrt(np.maximum(cme_diff_sq, 0))  # (N,)
+
+    return cme_diff
 
 
 class Algorithm(ABC):
