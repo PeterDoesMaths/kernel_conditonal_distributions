@@ -101,9 +101,9 @@ def kronecker_delta_kernel(X: np.ndarray, Y: Optional[np.ndarray] = None, **kwar
     
     Parameters
     ----------
-    X : np.ndarray, shape (n,)
+    X : np.ndarray, shape (n,) or (n, 1)
         First set of samples.
-    Y : np.ndarray, shape (m,), optional
+    Y : np.ndarray, shape (m,) or (m, 1), optional
         Second set of samples. If None, computes k(X, X).
     **kwargs
         Additional arguments (ignored, for compatibility with other kernels).
@@ -116,6 +116,10 @@ def kronecker_delta_kernel(X: np.ndarray, Y: Optional[np.ndarray] = None, **kwar
     if Y is None:
         Y = X
     
-    K = (X[:, None] == Y[None, :]).astype(float)
+    # Flatten to handle both (n,) and (n, 1) shapes
+    X_flat = X.ravel()
+    Y_flat = Y.ravel()
+    
+    K = (X_flat[:, None] == Y_flat[None, :]).astype(float)
     
     return K

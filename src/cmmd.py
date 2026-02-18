@@ -10,24 +10,24 @@ import numpy as np
 def _compute_x_kernels(
     X_P: np.ndarray,
     X_Q: np.ndarray,
-    kernel_fn: Callable,
+    kernel_x: Callable,
     **kwargs
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    K_XpXp = kernel_fn(X_P, X_P, **kwargs) # (n, n)
-    K_XqXq = kernel_fn(X_Q, X_Q, **kwargs) # (m, m)
-    K_XqXp = kernel_fn(X_Q, X_P, **kwargs) # (m, n)
+    K_XpXp = kernel_x(X_P, X_P, **kwargs) # (n, n)
+    K_XqXq = kernel_x(X_Q, X_Q, **kwargs) # (m, m)
+    K_XqXp = kernel_x(X_Q, X_P, **kwargs) # (m, n)
     return K_XpXp, K_XqXq, K_XqXp
 
 
 def _compute_yz_kernels(
     Y: np.ndarray,
     Z: np.ndarray,
-    kernel_fn: Callable,
+    kernel_y: Callable,
     **kwargs
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    L_YY = kernel_fn(Y, Y, **kwargs) # (n, n)
-    L_ZZ = kernel_fn(Z, Z, **kwargs) # (m, m)
-    L_YZ = kernel_fn(Y, Z, **kwargs) # (n, m)
+    L_YY = kernel_y(Y, Y, **kwargs) # (n, n)
+    L_ZZ = kernel_y(Z, Z, **kwargs) # (m, m)
+    L_YZ = kernel_y(Y, Z, **kwargs) # (n, m)
     return L_YY, L_ZZ, L_YZ
 
 
@@ -49,13 +49,13 @@ def _compute_w_matrices(
 def _compute_tilde_kernels(
     X_P: np.ndarray,
     X_Q: np.ndarray,
-    kernel_fn: Callable,
+    kernel_x: Callable,
     **kwargs
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     X_tilde = np.vstack([X_P, X_Q])
-    K_Xp_Xtilde = kernel_fn(X_P, X_tilde, **kwargs) # (n, n+m)
-    K_Xq_Xtilde = kernel_fn(X_Q, X_tilde, **kwargs) # (m, n+m)
-    K_Xtilde_Xtilde = kernel_fn(X_tilde, X_tilde, **kwargs) # (n+m, n+m)
+    K_Xp_Xtilde = kernel_x(X_P, X_tilde, **kwargs) # (n, n+m)
+    K_Xq_Xtilde = kernel_x(X_Q, X_tilde, **kwargs) # (m, n+m)
+    K_Xtilde_Xtilde = kernel_x(X_tilde, X_tilde, **kwargs) # (n+m, n+m)
     return K_Xp_Xtilde, K_Xq_Xtilde, K_Xtilde_Xtilde
 
 
@@ -77,7 +77,8 @@ class TestStatistic(ABC):
         Z: np.ndarray,
         lam_p: float,
         lam_q: float,
-        kernel_fn: Callable,
+        kernel_x: Callable,
+        kernel_y: Callable | None = None,
         **kwargs
     ) -> float:
         """
@@ -97,10 +98,12 @@ class TestStatistic(ABC):
             Regularization parameter for W_X = (K_XX + lam_p * n * I_n)^{-1}.
         lam_q : float
             Regularization parameter for W_X' = (K_X'X' + lam_q * m * I_m)^{-1}.
-        kernel_fn : callable
-            Kernel function k(X, Y, **kwargs) that computes kernel matrices.
+        kernel_x : callable
+            Kernel function for covariates X.
+        kernel_y : callable, optional
+            Kernel function for outcomes Y/Z. If None, uses kernel_x.
         **kwargs
-            Additional arguments passed to kernel_fn (e.g., bandwidth).
+            Additional arguments passed to kernels (e.g., bandwidth).
         
         Returns
         -------
@@ -125,14 +128,18 @@ class CMMD0(TestStatistic):
         Z: np.ndarray,
         lam_p: float,
         lam_q: float,
-        kernel_fn: Callable,
+        kernel_x: Callable,
+        kernel_y: Callable | None = None,
         **kwargs
     ) -> float:
         """
         Compute CMMD0 test statistic.
         """
-        K_XpXp, K_XqXq, K_XqXp = _compute_x_kernels(X_P, X_Q, kernel_fn, **kwargs)
-        L_YY, L_ZZ, L_YZ = _compute_yz_kernels(Y, Z, kernel_fn, **kwargs)
+        if kernel_y is None:
+            kernel_y = kernel_x
+        
+        K_XpXp, K_XqXq, K_XqXp = _compute_x_kernels(X_P, X_Q, kernel_x, **kwargs)
+        L_YY, L_ZZ, L_YZ = _compute_yz_kernels(Y, Z, kernel_y, **kwargs)
         W_Xp, W_Xq = _compute_w_matrices(K_XpXp, K_XqXq, lam_p, lam_q)
         
         # Compute the three terms of the CMMD statistic
@@ -168,22 +175,26 @@ class CMMD1(TestStatistic):
         Z: np.ndarray,
         lam_p: float,
         lam_q: float,
-        kernel_fn: Callable,
+        kernel_x: Callable,
+        kernel_y: Callable | None = None,
         **kwargs
     ) -> float:
         """
         Compute CMMD1 test statistic.
         """
+        if kernel_y is None:
+            kernel_y = kernel_x
+        
         n = X_P.shape[0]
         m = X_Q.shape[0]
 
-        K_XpXp, K_XqXq, _ = _compute_x_kernels(X_P, X_Q, kernel_fn, **kwargs)
+        K_XpXp, K_XqXq, _ = _compute_x_kernels(X_P, X_Q, kernel_x, **kwargs)
         K_Xp_Xtilde, K_Xq_Xtilde, _ = _compute_tilde_kernels(
-            X_P, X_Q, kernel_fn, **kwargs
+            X_P, X_Q, kernel_x, **kwargs
         )
         K_Xtilde_Xp = K_Xp_Xtilde.T
         K_Xtilde_Xq = K_Xq_Xtilde.T
-        L_YY, L_ZZ, L_YZ = _compute_yz_kernels(Y, Z, kernel_fn, **kwargs)
+        L_YY, L_ZZ, L_YZ = _compute_yz_kernels(Y, Z, kernel_y, **kwargs)
         W_Xp, W_Xq = _compute_w_matrices(K_XpXp, K_XqXq, lam_p, lam_q)
 
         # Compute the three terms of the CMMD statistic
@@ -216,19 +227,23 @@ class CMMD2(TestStatistic):
         Z: np.ndarray,
         lam_p: float,
         lam_q: float,
-        kernel_fn: Callable,
+        kernel_x: Callable,
+        kernel_y: Callable | None = None,
         estimator: str = "cmmd",
         **kwargs
     ) -> float:
         """
         Compute CMMD2 test statistic.
         """
+        if kernel_y is None:
+            kernel_y = kernel_x
+        
         estimator = estimator.lower()
         n = X_P.shape[0]
         m = X_Q.shape[0]
 
-        K_XpXp, K_XqXq, K_XqXp = _compute_x_kernels(X_P, X_Q, kernel_fn, **kwargs)
-        L_YY, L_ZZ, L_YZ = _compute_yz_kernels(Y, Z, kernel_fn, **kwargs)
+        K_XpXp, K_XqXq, K_XqXp = _compute_x_kernels(X_P, X_Q, kernel_x, **kwargs)
+        L_YY, L_ZZ, L_YZ = _compute_yz_kernels(Y, Z, kernel_y, **kwargs)
 
         if estimator == "jmmd":
             # Term 1: Tr(L_YY K_XX)
@@ -245,7 +260,7 @@ class CMMD2(TestStatistic):
 
         if estimator == "cmmd":
             W_Xp, W_Xq = _compute_w_matrices(K_XpXp, K_XqXq, lam_p, lam_q)
-            K_Xp_Xtilde, K_Xq_Xtilde, K_Xtilde_Xtilde = _compute_tilde_kernels(X_P, X_Q, kernel_fn, **kwargs)
+            K_Xp_Xtilde, K_Xq_Xtilde, K_Xtilde_Xtilde = _compute_tilde_kernels(X_P, X_Q, kernel_x, **kwargs)
             K_Xtilde_Xp = K_Xp_Xtilde.T
             K_Xtilde_Xq = K_Xq_Xtilde.T
 
@@ -271,6 +286,197 @@ class CMMD2(TestStatistic):
             f"Unknown estimator '{estimator}'. Use 'jmmd' or 'cmmd'."
         )
     
+class CMMD0_primal(TestStatistic):
+    """
+    CMMD0 test statistic using primal estimator of CMO.
+    
+    Compares two conditional distributions P(Y|X) and Q(Z|X) using conditional mean operators.
+    """
+    
+    def compute(
+        self,
+        X_P: np.ndarray,
+        Y: np.ndarray,
+        X_Q: np.ndarray,
+        Z: np.ndarray,
+        lam_p: float,
+        lam_q: float,
+        kernel_x: Callable,
+        kernel_y: Callable | None = None,
+        **kwargs
+    ) -> float:
+        """
+        Compute CMMD0 test statistic.
+
+        X_P, X_Q are categorical so we use kronecker delta kernel and compute CMO in primal form.
+        """
+        if kernel_y is None:
+            kernel_y = kernel_x
+
+        # Flatten X_P and X_Q since they're categorical
+        X_P_flat = np.asarray(X_P).flatten()
+        X_Q_flat = np.asarray(X_Q).flatten()
+
+        # Compute one hot encoding of X_P and X_Q
+        unique_X = np.unique(np.concatenate([np.unique(X_P_flat), np.unique(X_Q_flat)]))
+        Phi_Xp = np.zeros((unique_X.size, X_P_flat.shape[0]))
+        for i, x in enumerate(unique_X):
+            Phi_Xp[i, X_P_flat == x] = 1.0
+
+        Phi_Xq = np.zeros((unique_X.size, X_Q_flat.shape[0]))
+        for i, x in enumerate(unique_X):
+            Phi_Xq[i, X_Q_flat == x] = 1.0
+
+        # K_XpXp, K_XqXq, K_XqXp = _compute_x_kernels(X_P, X_Q, kernel_x, **kwargs)
+        L_YY, L_ZZ, L_YZ = _compute_yz_kernels(Y, Z, kernel_y, **kwargs)
+        W_Xp, W_Xq = _compute_w_matrices(Phi_Xp @ Phi_Xp.T, Phi_Xq @ Phi_Xq.T, lam_p, lam_q)
+        
+        # Compute the three terms of the CMMD statistic
+        # Term 1: Tr(W_X Phi_X L_YY Phi_X^* W_X)
+        term1 = np.trace(W_Xp @ Phi_Xp @ L_YY @ Phi_Xp.T @ W_Xp)
+        
+        # Term 2: -2 * Tr(W_X Phi_X L_YZ Phi_X'^* W_X')
+        term2 = -2.0 * np.trace(W_Xp @ Phi_Xp @ L_YZ @ Phi_Xq.T @ W_Xq)
+        
+        # Term 3: Tr(W_X' Phi_X' L_ZZ Phi_X'^* W_X')
+        term3 = np.trace(W_Xq @ Phi_Xq @ L_ZZ @ Phi_Xq.T @ W_Xq)
+        
+        # CMMD statistic
+        cmmd = term1 + term2 + term3
+        
+        return float(cmmd)
+    
+class CMMD1_primal(TestStatistic):
+    """
+    CMMD1 test statistic using primal estimator of CMO.
+    
+    Compares two conditional distributions P(Y|X) and Q(Z|X) using conditional mean operators.
+    """
+    
+    def compute(
+        self,
+        X_P: np.ndarray,
+        Y: np.ndarray,
+        X_Q: np.ndarray,
+        Z: np.ndarray,
+        lam_p: float,
+        lam_q: float,
+        kernel_x: Callable,
+        kernel_y: Callable | None = None,
+        **kwargs
+    ) -> float:
+        """
+        Compute CMMD1 test statistic.
+
+        X_P, X_Q are categorical so we use kronecker delta kernel and compute CMO in primal form.
+        """
+        if kernel_y is None:
+            kernel_y = kernel_x
+
+        n = X_P.shape[0]
+        m = X_Q.shape[0]
+
+        # Flatten X_P and X_Q since they're categorical
+        X_P_flat = np.asarray(X_P).flatten()
+        X_Q_flat = np.asarray(X_Q).flatten()
+
+        # Compute one hot encoding of X_P and X_Q
+        unique_X = np.unique(np.concatenate([np.unique(X_P_flat), np.unique(X_Q_flat)]))
+        Phi_Xp = np.zeros((unique_X.size, X_P_flat.shape[0]))
+        for i, x in enumerate(unique_X):
+            Phi_Xp[i, X_P_flat == x] = 1.0
+
+        Phi_Xq = np.zeros((unique_X.size, X_Q_flat.shape[0]))
+        for i, x in enumerate(unique_X):
+            Phi_Xq[i, X_Q_flat == x] = 1.0
+
+        # K_XpXp, K_XqXq, K_XqXp = _compute_x_kernels(X_P, X_Q, kernel_x, **kwargs)
+        L_YY, L_ZZ, L_YZ = _compute_yz_kernels(Y, Z, kernel_y, **kwargs)
+        W_Xp, W_Xq = _compute_w_matrices(Phi_Xp @ Phi_Xp.T, Phi_Xq @ Phi_Xq.T, lam_p, lam_q)
+        
+        # Estimate covariance matrix
+        C_XX = (1 / (n + m)) * (Phi_Xp @ Phi_Xp.T + Phi_Xq @ Phi_Xq.T)
+
+        # Compute the three terms of the CMMD statistic
+        # Term 1: Tr(W_X Phi_X L_YY Phi_X^* W_X C_XX)
+        term1 = np.trace(W_Xp @ Phi_Xp @ L_YY @ Phi_Xp.T @ W_Xp @ C_XX)
+        
+        # Term 2: -2 * Tr(W_X Phi_X L_YZ Phi_X'^* W_X' C_XX)
+        term2 = -2.0 * np.trace(W_Xp @ Phi_Xp @ L_YZ @ Phi_Xq.T @ W_Xq @ C_XX)
+        
+        # Term 3: Tr(W_X' Phi_X' L_ZZ Phi_X'^* W_X' C_XX)
+        term3 = np.trace(W_Xq @ Phi_Xq @ L_ZZ @ Phi_Xq.T @ W_Xq @ C_XX)
+        
+        # CMMD statistic
+        cmmd = term1 + term2 + term3
+        
+        return float(cmmd)
+
+class CMMD2_primal(TestStatistic):
+    """
+    CMMD2 test statistic using primal estimator of CMO.
+    
+    Compares two conditional distributions P(Y|X) and Q(Z|X) using conditional mean operators.
+    """
+    
+    def compute(
+        self,
+        X_P: np.ndarray,
+        Y: np.ndarray,
+        X_Q: np.ndarray,
+        Z: np.ndarray,
+        lam_p: float,
+        lam_q: float,
+        kernel_x: Callable,
+        kernel_y: Callable | None = None,
+        **kwargs
+    ) -> float:
+        """
+        Compute CMMD2 test statistic.
+
+        X_P, X_Q are categorical so we use kronecker delta kernel and compute CMO in primal form.
+        """
+        if kernel_y is None:
+            kernel_y = kernel_x
+
+        n = X_P.shape[0]
+        m = X_Q.shape[0]
+
+        # Flatten X_P and X_Q since they're categorical
+        X_P_flat = np.asarray(X_P).flatten()
+        X_Q_flat = np.asarray(X_Q).flatten()
+
+        # Compute one hot encoding of X_P and X_Q
+        unique_X = np.unique(np.concatenate([np.unique(X_P_flat), np.unique(X_Q_flat)]))
+        Phi_Xp = np.zeros((unique_X.size, X_P_flat.shape[0]))
+        for i, x in enumerate(unique_X):
+            Phi_Xp[i, X_P_flat == x] = 1.0
+
+        Phi_Xq = np.zeros((unique_X.size, X_Q_flat.shape[0]))
+        for i, x in enumerate(unique_X):
+            Phi_Xq[i, X_Q_flat == x] = 1.0
+
+        # K_XpXp, K_XqXq, K_XqXp = _compute_x_kernels(X_P, X_Q, kernel_x, **kwargs)
+        L_YY, L_ZZ, L_YZ = _compute_yz_kernels(Y, Z, kernel_y, **kwargs)
+        W_Xp, W_Xq = _compute_w_matrices(Phi_Xp @ Phi_Xp.T, Phi_Xq @ Phi_Xq.T, lam_p, lam_q)
+        
+        # Estimate covariance matrix
+        C_XX = (1 / (n + m)) * (Phi_Xp @ Phi_Xp.T + Phi_Xq @ Phi_Xq.T)
+
+        # Compute the three terms of the CMMD statistic
+        # Term 1: Tr(W_X Phi_X L_YY Phi_X^* W_X C_XX^2)
+        term1 = np.trace(W_Xp @ Phi_Xp @ L_YY @ Phi_Xp.T @ W_Xp @ C_XX @ C_XX)
+        
+        # Term 2: -2 * Tr(W_X Phi_X L_YZ Phi_X'^* W_X' C_XX^2)
+        term2 = -2.0 * np.trace(W_Xp @ Phi_Xp @ L_YZ @ Phi_Xq.T @ W_Xq @ C_XX @ C_XX)
+        
+        # Term 3: Tr(W_X' Phi_X' L_ZZ Phi_X'^* W_X' C_XX^2)
+        term3 = np.trace(W_Xq @ Phi_Xq @ L_ZZ @ Phi_Xq.T @ W_Xq @ C_XX @ C_XX)
+        
+        # CMMD statistic
+        cmmd = term1 + term2 + term3
+        
+        return float(cmmd)
 
 def cme_diff(
     x_test: np.ndarray,
@@ -408,13 +614,17 @@ class Test_Same_Marginal(Algorithm):
         X_Q: np.ndarray,
         Z: np.ndarray,
         test_statistic: TestStatistic,
-        kernel_fn: Callable,
+        kernel_x: Callable,
+        kernel_y: Callable | None = None,
         algo_kwargs: dict | None = None,
         stat_kwargs: dict | None = None
     ) -> Tuple[float, float]:
         """
         Kernel two-sample test for conditional distribution (P_X = Q_X).
         """
+        if kernel_y is None:
+            kernel_y = kernel_x
+        
         algo_kwargs = algo_kwargs or {}
         stat_kwargs = stat_kwargs or {}
 
@@ -432,7 +642,8 @@ class Test_Same_Marginal(Algorithm):
             Z,
             lam_p,
             lam_q,
-            kernel_fn,
+            kernel_x,
+            kernel_y,
             **stat_kwargs,
         )
 
@@ -462,7 +673,8 @@ class Test_Same_Marginal(Algorithm):
                 Z_b,
                 lam_p,
                 lam_q,
-                kernel_fn,
+                kernel_x,
+                kernel_y,
                 **stat_kwargs,
             )
 
@@ -489,13 +701,17 @@ class Test_Diff_Marginal(Algorithm):
         X_Q: np.ndarray,
         Z: np.ndarray,
         test_statistic: TestStatistic,
-        kernel_fn: Callable,
+        kernel_x: Callable,
+        kernel_y: Callable | None = None,
         algo_kwargs: dict | None = None,
         stat_kwargs: dict | None = None
     ) -> Tuple[float, float]:
         """
         Kernel two-sample test for conditional distribution (P_X != Q_X).
         """
+        if kernel_y is None:
+            kernel_y = kernel_x
+        
         algo_kwargs = algo_kwargs or {}
         stat_kwargs = stat_kwargs or {}
 
@@ -517,7 +733,8 @@ class Test_Diff_Marginal(Algorithm):
             Z,
             lam_p,
             lam_q,
-            kernel_fn,
+            kernel_x,
+            kernel_y,
             **stat_kwargs,
         )
 
@@ -582,7 +799,8 @@ class Test_Diff_Marginal(Algorithm):
                     Z_b,
                     lam_p,
                     lam_q,
-                    kernel_fn,
+                    kernel_x,
+                    kernel_y,
                     **stat_kwargs,
                 )
             else:
