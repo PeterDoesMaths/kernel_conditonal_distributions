@@ -14,7 +14,7 @@ sys.path.insert(0, project_root)
 
 from src.cmmd import CMMD0, CMMD1, CMMD2
 from src.kernels import gaussian_kernel, median_heuristic
-from src.models import sample_joint, sample_covariate, sample_covariate_p, sample_covariate_q, conditional_y, conditional_z
+from src.models import sample_joint, sample_joint_theta, sample_covariate, sample_covariate_p, sample_covariate_q, conditional_y, conditional_z
 
 
 def run_cmmd_experiment(
@@ -88,16 +88,19 @@ def run_cmmd_experiment(
             marginal_p = sample_covariate_p
             marginal_q = sample_covariate_q
             cmmd2_estimator = "cmmd"
+        elif setting == 'same_marginal_theta':
+            theta = 0.0
+            cmmd2_estimator = "jmmd"
         else:
             raise ValueError(f"Unknown setting: {setting}. Must be 'same_marginal' or 'diff_marginal'.")
         
-        # P: Y|X
-        X_P, Y = sample_joint(n_samples, marginal_p, conditional_y, noise_std=noise_std, 
-                               seed=trial*2)
-        
-        # Q: Z|X
-        X_Q, Z = sample_joint(n_samples, marginal_q, conditional_z, noise_std=noise_std, 
-                               seed=trial*2 + 1)
+
+        if setting == 'same_marginal_theta':
+            X_P, Y = sample_joint_theta(n_samples, theta, conditional_y, noise_std=noise_std, seed=trial*2)
+            X_Q, Z = sample_joint_theta(n_samples, theta, conditional_z, noise_std=noise_std, seed=trial*2 + 1)
+        else:
+            X_P, Y = sample_joint(n_samples, marginal_p, conditional_y, noise_std=noise_std, seed=trial*2)
+            X_Q, Z = sample_joint(n_samples, marginal_q, conditional_z, noise_std=noise_std, seed=trial*2 + 1)
         
         # Ensure data is 2D for kernel computation
         X_P = X_P.reshape(-1, 1)
@@ -143,7 +146,8 @@ def run_cmmd_experiment(
 def plot_test_statistics(
     cmmd0_stats: np.ndarray,
     cmmd1_stats: np.ndarray,
-    cmmd2_stats: np.ndarray
+    cmmd2_stats: np.ndarray,
+    setting: str = "same_marginal_theta"
 ):
     """
     Plot histograms of CMMD0, CMMD1, and CMMD2 test statistics.
@@ -156,6 +160,8 @@ def plot_test_statistics(
         CMMD1 test statistics from multiple trials.
     cmmd2_stats : np.ndarray
         CMMD2 test statistics from multiple trials.
+    setting : str, default="same_marginal_theta"
+        Setting for plot ("same_marginal", "diff_marginal", or "same_marginal_theta").
     """
     fig, ax = plt.subplots(figsize=(8, 6))
     
@@ -186,13 +192,16 @@ def plot_test_statistics(
     )
     
     # Add labels and title
-    ax.set_xlabel('CMMD$^2(P_{Y|X}, Q_{Z|X})$', fontsize=20)
+    ax.set_xlabel(r'$\widehat{CMM}D^2$', fontsize=20)
     ax.set_ylabel('Frequency', fontsize=20)
     ax.set_title('Distribution of Test Statistic',
                  fontsize=24)
     ax.set_xscale('log')
     ax.tick_params(axis="both", which="major", labelsize=14)
-    ax.legend(fontsize=16, loc=(0.6, 0.75))
+    if setting == "same_marginal_theta":
+        ax.legend(fontsize=16)
+    else:
+        ax.legend(fontsize=16, loc=(0.6, 0.75))
     
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
@@ -202,13 +211,19 @@ def plot_test_statistics(
 
 if __name__ == '__main__':
     # Setting
-    setting="same_marginal"
+    setting="same_marginal_theta"
+    # setting="same_marginal"
     # setting="diff_marginal"
+
+    if setting == "same_marginal_theta":
+        n_samples = 100
+    else:
+        n_samples = 250
 
     # Run experiment
     cmmd0_stats, cmmd1_stats, cmmd2_stats = run_cmmd_experiment(
         n_trials=250,
-        n_samples=250,
+        n_samples=n_samples,
         lam_p=0.1,
         lam_q=0.1,
         bandwidth=0.1,
@@ -217,7 +232,7 @@ if __name__ == '__main__':
     )
     
     # Plot results
-    fig, ax = plot_test_statistics(cmmd0_stats, cmmd1_stats, cmmd2_stats)
+    fig, ax = plot_test_statistics(cmmd0_stats, cmmd1_stats, cmmd2_stats, setting)
     
     # Save figure (use absolute path)
     figs_dir = os.path.join(script_dir, '..', 'figs/synthetic')

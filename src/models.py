@@ -152,6 +152,44 @@ def sample_joint(
     
     return X, Y
 
+def sample_joint_theta(
+    n: int,
+    theta: float,
+    conditional_fn: Callable,
+    noise_std: float = 0.5,
+    seed: int = None
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Sample from joint distribution P_{Y|X} ⊗ P_X.
+    
+    Parameters
+    ----------
+    n : int
+        Number of samples.
+    theta : float
+        Parameter controlling the mean of the marginal distribution.
+    conditional_fn : callable
+        Function (X, noise_std, seed) -> Y that generates conditional samples.
+    noise_std : float, default=0.5
+        Standard deviation of the noise term.
+    seed : int, optional
+        Random seed for reproducibility.
+    
+    Returns
+    -------
+    X : np.ndarray, shape (n,)
+        Covariate samples.
+    Y : np.ndarray, shape (n,)
+        Conditional outcome samples.
+    """
+    rng = np.random.default_rng(seed)
+    seed_y = rng.integers(0, 2**31)
+    
+    X = rng.normal(theta, 0.75, size=n)
+    Y = conditional_fn(X, noise_std=noise_std, seed=seed_y)
+    
+    return X, Y
+
 def propensity(X: np.ndarray, mu_p: float = -0.5, mu_q: float = 0.5, sigma: float = 1.0) -> np.ndarray:
     """
     propensity score function.
