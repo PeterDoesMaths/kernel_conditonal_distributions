@@ -89,7 +89,7 @@ def run_cmmd_experiment(
             marginal_q = sample_covariate_q
             cmmd2_estimator = "cmmd"
         elif setting == 'same_marginal_theta':
-            theta = 0.0
+            theta = 0.5
             cmmd2_estimator = "jmmd"
         else:
             raise ValueError(f"Unknown setting: {setting}. Must be 'same_marginal' or 'diff_marginal'.")
