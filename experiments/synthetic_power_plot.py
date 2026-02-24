@@ -146,8 +146,8 @@ def plot_power_vs_sample_size(
 	ax.plot(thetas, results["cmmd1"], marker="s", label="CMMD$_1$")
 	ax.plot(thetas, results["cmmd2"], marker="^", label="CMMD$_2$")
 
-	ax.set_title("Power curve for CMMD Test", fontsize=24)
-	ax.set_xlabel("$\\theta$", fontsize=20)
+	ax.set_title("Power Curve", fontsize=24)
+	ax.set_xlabel("Covariate mean ($\\theta$)", fontsize=20)
 	ax.set_ylabel("Power", fontsize=20)
 	ax.set_ylim(0.0, 1.1)
 	ax.legend(fontsize=16)
