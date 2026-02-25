@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 from typing import Callable, Tuple
 import sys
 import os
+from sklearn.kernel_ridge import KernelRidge
+from sklearn.model_selection import GridSearchCV
 
 # Add project root to path (robust to different working directories)
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -14,7 +16,7 @@ project_root = os.path.dirname(script_dir)
 sys.path.insert(0, project_root)
 
 from src.cmmd import CMMD1
-from src.kernels import gaussian_kernel
+from src.kernels import gaussian_kernel, indicator_kernel
 from src.dr_models import (
 	sample_joint,
 	sample_covariate_p,
@@ -25,25 +27,38 @@ from src.dr_models import (
 )
 
 
-def cme_model(
+def fit_krr_predict(
+	x_train: np.ndarray,
+	y_train: np.ndarray,
 	x_test: np.ndarray,
-	X: np.ndarray,
-	Y: np.ndarray,
-	lam: float,
-	kernel_x: Callable,
-	**kwargs
+	bandwidth: float,
+	label: str,
+	alpha_grid: np.ndarray | None = None,
+	cv: int = 5,
 ) -> np.ndarray:
 	"""
-	Evaluate CME at test values of x.
+	Fit KernelRidge with CV over alpha and predict on x_test.
 	"""
-	K = kernel_x(X, X, **kwargs)
-	W_X = np.linalg.inv(K + lam * X.shape[0] * np.eye(X.shape[0]))
-	K_Xx = kernel_x(X, x_test, **kwargs)
+	if alpha_grid is None:
+		alpha_grid = np.logspace(-4, 1, 12)
 
-	Y_flat = Y.flatten()
-	mu_Y = Y_flat @ W_X @ K_Xx
+	x_train_2d = x_train.reshape(-1, 1) if x_train.ndim == 1 else x_train
+	x_test_2d = x_test.reshape(-1, 1) if x_test.ndim == 1 else x_test
+	y_train_1d = y_train.ravel()
 
-	return mu_Y
+	gamma = 0.5 * bandwidth
+	krr = KernelRidge(kernel="rbf", gamma=gamma)
+
+	search = GridSearchCV(
+		estimator=krr,
+		param_grid={"alpha": alpha_grid},
+		cv=min(cv, x_train_2d.shape[0]),
+		scoring="neg_mean_squared_error",
+	)
+	search.fit(x_train_2d, y_train_1d)
+
+	best_model = search.best_estimator_
+	return best_model.predict(x_test_2d)
 
 
 def true_cmmd(n_samples: int = 2000) -> float:
@@ -66,21 +81,9 @@ def compute_cmmd1_estimates(
 	"""
 	Compute standard and doubly robust CMMD1^2 estimates for one trial.
 	"""
-	cmmd1_standard_stat = CMMD1()
 
 	X_P, Y = sample_joint(n_samples, sample_covariate_p, conditional_y, seed=seed)
 	X_Q, Z = sample_joint(n_samples, sample_covariate_q, conditional_z, seed=seed + 1)
-	
-	lam_p = 0.01 * n_samples **(-0.25)
-	lam_q = 0.01 * n_samples **(-0.25)
-
-	stat_standard = cmmd1_standard_stat.compute(
-		X_P.reshape(-1, 1), Y.reshape(-1, 1), 
-		X_Q.reshape(-1, 1), Z.reshape(-1, 1),
-		lam_p, lam_q,
-		gaussian_kernel,
-		bandwidth=bandwidth,
-	)
 
 	X_test = np.concatenate([X_P, X_Q])
 	YZ_test = np.concatenate([Y, Z])
@@ -88,17 +91,31 @@ def compute_cmmd1_estimates(
 
 	E = propensity(X_test)
 
-	cme_Y = cme_model(
-		X_test, X_P, Y, lam_p, gaussian_kernel, bandwidth=bandwidth
+	cme_Y = fit_krr_predict(
+		x_train=X_P,
+		y_train=Y,
+		x_test=X_test,
+		bandwidth=bandwidth,
+		label="E[Y|X]",
 	)
-	cme_Z = cme_model(
-		X_test, X_Q, Z, lam_q, gaussian_kernel, bandwidth=bandwidth
+	cme_Z = fit_krr_predict(
+		x_train=X_Q,
+		y_train=Z,
+		x_test=X_test,
+		bandwidth=bandwidth,
+		label="E[Z|X]",
 	)
 
-	psuedo_outcome = (T - E) / (E * (1 - E)) * (YZ_test - (1 - E) * cme_Y - E * cme_Z)
+	stat_standard = np.mean((cme_Y - cme_Z) ** 2)
 
-	dr_cme_diff = cme_model(
-		X_test, X_test, psuedo_outcome, lam_p, gaussian_kernel, bandwidth=bandwidth
+	pseudo_outcome = (T - E) / (E * (1 - E)) * (YZ_test - (1 - E) * cme_Y - E * cme_Z)
+
+	dr_cme_diff = fit_krr_predict(
+		x_train=X_test,
+		y_train=pseudo_outcome,
+		x_test=X_test,
+		bandwidth=bandwidth,
+		label="DR correction",
 	)
 	stat_dr = np.mean(dr_cme_diff**2)
 
@@ -200,7 +217,7 @@ def plot_error_curves(
 
 
 if __name__ == "__main__":
-	sample_sizes = np.array([30, 50, 100, 200, 300, 400, 500])
+	sample_sizes = np.array([100, 200, 300, 400, 500])
 	bandwidth = 0.1
 	n_trials = 100
 

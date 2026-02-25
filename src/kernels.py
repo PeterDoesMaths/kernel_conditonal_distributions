@@ -123,3 +123,35 @@ def kronecker_delta_kernel(X: np.ndarray, Y: Optional[np.ndarray] = None, **kwar
     K = (X_flat[:, None] == Y_flat[None, :]).astype(float)
     
     return K
+
+def indicator_kernel(X: np.ndarray, Y: Optional[np.ndarray] = None, **kwargs) -> np.ndarray:
+    """
+    Compute the indicator kernel matrix.
+    
+    k(x, y) = 1 if x == y and x == 1 else 0
+    
+    Parameters
+    ----------
+    X : np.ndarray, shape (n,) or (n, 1)
+        First set of samples.
+    Y : np.ndarray, shape (m,) or (m, 1), optional
+        Second set of samples. If None, computes k(X, X).
+    **kwargs
+        Additional arguments (ignored, for compatibility with other kernels).
+    
+    Returns
+    -------
+    K : np.ndarray, shape (n, m) or (n, n)
+        Kernel matrix where K[i, j] = k(X[i], Y[j]).
+    """
+    if Y is None:
+        Y = X
+    
+    # Flatten to handle both (n,) and (n, 1) shapes
+    X_flat = X.ravel()
+    Y_flat = Y.ravel()
+    
+    K = (X_flat[:, None] == Y_flat[None, :]) & (X_flat[:, None] == 1)
+    K = K.astype(float)
+    
+    return K
