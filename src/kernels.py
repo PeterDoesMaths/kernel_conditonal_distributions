@@ -124,6 +124,39 @@ def kronecker_delta_kernel(X: np.ndarray, Y: Optional[np.ndarray] = None, **kwar
     
     return K
 
+def linear_kernel(X: np.ndarray, Y: Optional[np.ndarray] = None, **kwargs) -> np.ndarray:
+    """
+    Compute the linear kernel matrix.
+    
+    k(x, y) = <x, y>
+    
+    Parameters
+    ----------
+    X : np.ndarray, shape (n, d) or (n,)
+        First set of samples. If 1D, will be reshaped to (n, 1).
+    Y : np.ndarray, shape (m, d) or (m,), optional
+        Second set of samples. If None, computes k(X, X).
+        If 1D, will be reshaped to (m, 1).
+    **kwargs
+        Additional arguments (ignored, for compatibility with other kernels).
+    
+    Returns
+    -------
+    K : np.ndarray, shape (n, m) or (n, n)
+        Kernel matrix where K[i, j] = k(X[i], Y[j]).
+    """
+    if X.ndim == 1:
+        X = X.reshape(-1, 1)
+    
+    if Y is None:
+        Y = X
+    elif Y.ndim == 1:
+        Y = Y.reshape(-1, 1)
+    
+    K = X @ Y.T
+    
+    return K
+
 def indicator_kernel(X: np.ndarray, Y: Optional[np.ndarray] = None, **kwargs) -> np.ndarray:
     """
     Compute the indicator kernel matrix.

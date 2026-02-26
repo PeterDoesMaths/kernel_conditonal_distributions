@@ -47,7 +47,8 @@ def sample_covariate_q(n: int, seed: int = None) -> np.ndarray:
 
 def conditional_y(X: np.ndarray, seed: int = None) -> np.ndarray:
     """
-    Sample from conditional distribution P(Y=1|X) = 0.25cos(12X) + 0.5X^2 + 0.25
+    Sample from conditional distribution Y|X = cos(12X) + 0.5X^2 + Noise
+    # P(Y=1|X) = 0.25cos(12X) + 0.5X^2 + 0.25
     
     Parameters
     ----------
@@ -63,8 +64,9 @@ def conditional_y(X: np.ndarray, seed: int = None) -> np.ndarray:
     """
     rng = np.random.default_rng(seed)
     n = len(X)
-    prob = 0.25 * np.cos(12 * X) + 0.5 * X**2 + 0.25
-    Y = rng.binomial(1, prob, size=n)
+    # prob = 0.25 * np.cos(12 * X) + 0.5 * X**2 + 0.25
+    # Y = rng.binomial(1, prob, size=n)
+    Y = np.cos(4 * np.pi * X) + 0.5 * X**2 + rng.normal(0, 0.5, size=n)
     return Y
 
 
@@ -86,8 +88,9 @@ def conditional_z(X: np.ndarray, seed: int = None) -> np.ndarray:
     """
     rng = np.random.default_rng(seed)
     n = len(X)
-    prob = 0.25 * np.cos(12 * X) + 0.25
-    Z = rng.binomial(1, prob, size=n)
+    # prob = 0.25 * np.cos(12 * X) + 0.25
+    # Z = rng.binomial(1, prob, size=n)
+    Z = np.cos(4 * np.pi * X) + rng.normal(0, 0.5, size=n)
     return Z
 
 

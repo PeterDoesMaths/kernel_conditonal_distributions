@@ -7,57 +7,77 @@ the conditional mean embeddings for Y and Z using kernel ridge regression.
 
 import numpy as np
 import matplotlib.pyplot as plt
-from typing import Callable, Tuple
+from typing import Optional
 import sys
 from pathlib import Path
+from sklearn.kernel_ridge import KernelRidge
+from sklearn.model_selection import GridSearchCV
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.dr_models import sample_joint, sample_covariate_p, sample_covariate_q, conditional_y, conditional_z, propensity
-from src.kernels import gaussian_kernel, kronecker_delta_kernel
 
 def cme_model(
-    x_test: np.ndarray,
     X: np.ndarray,
     Y: np.ndarray,
-    lam: float,
-    kernel_x: Callable,
-    **kwargs
-) -> np.ndarray:
+    bandwidth: float,
+    alpha_grid: Optional[np.ndarray] = None,
+    cv: int = 5,
+) -> KernelRidge:
     """
-    Evaluate CME at test values of x.
+    Fit CME model via sklearn KernelRidge with CV-tuned regularization.
     
     Parameters
     ----------
-    x_test : np.ndarray, shape (N,)
-        Test points where CME  is evaluated.
+    X : np.ndarray, shape (n,) or (n, d)
+        Training covariates.
+    Y : np.ndarray, shape (n,) or (n, 1)
+        Training responses.
+    bandwidth : float
+        User-provided kernel bandwidth.
+    alpha_grid : np.ndarray, optional
+        Candidate regularization values for CV.
+    cv : int, default=5
+        Number of cross-validation folds.
     
     Returns
     -------
-    cme : np.ndarray, shape (N,)
-        CME at each test point.
+    KernelRidge
+        Best fitted model selected by cross-validation.
     """
+    if alpha_grid is None:
+        alpha_grid = np.logspace(-4, 1, 5)
 
-    K = kernel_x(X, X, **kwargs)  # (n, n)
-    W_X = np.linalg.inv(K + lam * X.shape[0] * np.eye(X.shape[0]))  # (n, n)
+    x_train_2d = X.reshape(-1, 1) if X.ndim == 1 else X
+    y_train_1d = Y.ravel()
+    gamma = 0.5 * bandwidth
 
-    K_Xx = kernel_x(X, x_test, **kwargs) # (n, N)
+    base_model = KernelRidge(kernel="polynomial", degree=2, coef0=1, gamma=gamma)
+    cv_folds = min(cv, x_train_2d.shape[0])
 
-    # Compute scalar difference: μ̂_{Y|x}
-    Y_flat = Y.flatten()  # (n,)
-    
-    mu_Y = Y_flat @ W_X @ K_Xx  # (N,)
+    if cv_folds < 2:
+        fallback_model = KernelRidge(kernel="rbf", gamma=gamma, alpha=float(alpha_grid[0]))
+        fallback_model.fit(x_train_2d, y_train_1d)
+        return fallback_model
 
-    return mu_Y
+    search = GridSearchCV(
+        estimator=base_model,
+        param_grid={"alpha": alpha_grid},
+        cv=cv_folds,
+        scoring="neg_mean_squared_error",
+    )
+    search.fit(x_train_2d, y_train_1d)
+
+    return search.best_estimator_
 
 def plot_cme_data(x_eval: np.ndarray, cme_Y: np.ndarray, cme_Z: np.ndarray, X_p: np.ndarray, Y: np.ndarray, X_q: np.ndarray, Z: np.ndarray):
     """
     Plot the CME estimates for Y and Z, as well as the training data. Have different plots for P and Q samples.
     """
 
-    true_y = 0.25 * np.cos(12 * x_eval) + 0.5 * x_eval**2 + 0.25
-    true_z = 0.25 * np.cos(12 * x_eval) + 0.25
+    true_y = np.cos(4 * np.pi * x_eval) + 0.5 * x_eval**2 
+    true_z = np.cos(4 * np.pi * x_eval)
 
     fig, axes = plt.subplots(1, 2, figsize=(16, 6), sharex=True)
 
@@ -85,6 +105,22 @@ def plot_cme_data(x_eval: np.ndarray, cme_Y: np.ndarray, cme_Z: np.ndarray, X_p:
 
     plt.tight_layout()
 
+    plt.show()
+
+def plot_pseudo_outcome(X_test: np.ndarray, pseudo_outcome: np.ndarray, peudo_cme_diff: np.ndarray):
+    """Plot the pseudo-outcome used for doubly robust estimation.
+    """
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    sc = ax.scatter(X_test, pseudo_outcome, alpha=0.6, edgecolors='w')
+    ax.plot(np.sort(X_test), peudo_cme_diff[np.argsort(X_test)], color='red', linewidth=2, label='KRR Fit of Pseudo-outcome')
+    ax.set_xlabel("$x$", fontsize=20)
+    ax.set_ylabel("Pseudo-outcome", fontsize=20)
+    ax.set_title("Pseudo-outcome for Doubly Robust Estimation", fontsize=24)
+    ax.tick_params(axis="both", which="major", labelsize=14)
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
     plt.show()
 
 def plot_cme_difference(x_eval: np.ndarray, true_diff: np.ndarray, standard_cme_diff: np.ndarray, dr_cme_diff: np.ndarray):
@@ -123,7 +159,7 @@ def main():
     seed = 1
     
     # Sample size
-    n_samples = 200
+    n_samples = 100
     
     # Sample from P and Q
     X_p, Y = sample_joint(
@@ -142,28 +178,31 @@ def main():
     # Set bandwidth 
     bandwidth = 2.0
     
-    # Regularization parameter
-    lam_p = 1e-3
-    lam_q = 1e-3
-    
-    # Compute CME difference
-    cme_Y = cme_model(x_eval, X_p, Y, lam_p, gaussian_kernel, bandwidth=bandwidth)
-    cme_Z = cme_model(x_eval, X_q, Z, lam_q, gaussian_kernel, bandwidth=bandwidth)
+    # Fit CME models once
+    model_Y = cme_model(X_p, Y, bandwidth=bandwidth)
+    model_Z = cme_model(X_q, Z, bandwidth=bandwidth)
+
+    x_eval_2d = x_eval.reshape(-1, 1)
+
+    # Evaluate fitted models at x_eval
+    cme_Y = model_Y.predict(x_eval_2d)
+    cme_Z = model_Z.predict(x_eval_2d)
     standard_cme_diff = cme_Y - cme_Z
 
     # merge data for DR estimation
     X_test = np.concatenate([X_p, X_q])
+    X_test_2d = X_test.reshape(-1, 1)
     YZ_test = np.concatenate([Y, Z])
     
-    # # T indicates which samples are from P (T=1) vs Q (T=0)
+    # T indicates which samples are from P (T=1) vs Q (T=0)
     T = np.concatenate([np.ones_like(Y), np.zeros_like(Z)])
 
-    # # Compute Propensity scores on test set
+    # Compute Propensity scores on test set
     E = propensity(X_test)
 
-    # # CME models for Y and Z
-    cme_Y_train = cme_model(X_test, X_p, Y, lam_p, gaussian_kernel, bandwidth=bandwidth)
-    cme_Z_train = cme_model(X_test, X_q, Z, lam_q, gaussian_kernel, bandwidth=bandwidth)
+    # Reuse the same fitted CME models at X_test
+    cme_Y_train = model_Y.predict(X_test_2d)
+    cme_Z_train = model_Z.predict(X_test_2d)
 
     # RKHS difference psuedo-outcome for doubly robust estimation
     psuedo_outcome = (T - E) / (E * (1 - E)) * (YZ_test - (1 - E) * cme_Y_train - E * cme_Z_train)
@@ -171,8 +210,12 @@ def main():
     plot_cme_data(x_eval, cme_Y, cme_Z, X_p, Y, X_q, Z)
 
     # Compute doubly robust CME difference
-    bandwidth_dr = bandwidth
-    dr_cme_diff = cme_model(x_eval, X_test, psuedo_outcome, 10*lam_p, gaussian_kernel, bandwidth=bandwidth_dr)
+    model_dr = cme_model(X_test, psuedo_outcome, bandwidth=bandwidth)
+
+    peudo_cme_diff = model_dr.predict(X_test_2d)
+    plot_pseudo_outcome(X_test, psuedo_outcome, peudo_cme_diff)
+
+    dr_cme_diff = model_dr.predict(x_eval_2d)
     
     # Plot results
     plot_cme_difference(x_eval, true_diff, standard_cme_diff, dr_cme_diff)
