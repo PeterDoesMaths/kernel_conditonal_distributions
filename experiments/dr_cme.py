@@ -51,6 +51,42 @@ def cme_model(
 
     return mu_Y
 
+def plot_cme_data(x_eval: np.ndarray, cme_Y: np.ndarray, cme_Z: np.ndarray, X_p: np.ndarray, Y: np.ndarray, X_q: np.ndarray, Z: np.ndarray):
+    """
+    Plot the CME estimates for Y and Z, as well as the training data. Have different plots for P and Q samples.
+    """
+
+    true_y = 0.25 * np.cos(12 * x_eval) + 0.5 * x_eval**2 + 0.25
+    true_z = 0.25 * np.cos(12 * x_eval) + 0.25
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6), sharex=True)
+
+    # plot 1, CME for Y with P samples
+    axes[0].plot(x_eval, cme_Y, label="CME Y|X", linewidth=2, color='blue')
+    axes[0].plot(x_eval, true_y, label="True Y|X", linewidth=2, color='black', linestyle='--')
+    axes[0].scatter(X_p, Y, label="P samples", alpha=0.5, color='blue', edgecolor='k', s=50)
+    axes[0].set_xlabel("$x$", fontsize=20)
+    axes[0].set_ylabel(r"$\mu_{Y|x}$", fontsize=20)
+    axes[0].set_title("Conditional Mean Embedding for Y|X", fontsize=20)
+    axes[0].tick_params(axis="both", which="major", labelsize=14)
+    axes[0].legend(fontsize=16)
+    axes[0].grid(True, alpha=0.3)
+
+    # plot 2, CME for Z with Q samples
+    axes[1].plot(x_eval, cme_Z, label="CME Z|X", linewidth=2, color='red')
+    axes[1].plot(x_eval, true_z, label="True Z|X", linewidth=2, color='black', linestyle='--')
+    axes[1].scatter(X_q, Z, label="Q samples", alpha=0.5, color='red', edgecolor='k', s=50)
+    axes[1].set_xlabel("$x$", fontsize=20)
+    axes[1].set_ylabel(r"$\mu_{Z|x}$", fontsize=20)
+    axes[1].set_title("Conditional Mean Embedding for Z|X", fontsize=20)
+    axes[1].tick_params(axis="both", which="major", labelsize=14)
+    axes[1].legend(fontsize=16)
+    axes[1].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+
+    plt.show()
+
 def plot_cme_difference(x_eval: np.ndarray, true_diff: np.ndarray, standard_cme_diff: np.ndarray, dr_cme_diff: np.ndarray):
     """
     Plot the true difference, standard CME difference, and doubly robust CME difference.
@@ -73,11 +109,11 @@ def plot_cme_difference(x_eval: np.ndarray, true_diff: np.ndarray, standard_cme_
     plt.tight_layout()
     
     # Save figure
-    output_dir = Path(__file__).parent.parent / "figs" / "dr"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / "cme_difference.pdf"
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"\nFigure saved to: {output_path}")
+    # output_dir = Path(__file__).parent.parent / "figs" / "dr"
+    # output_dir.mkdir(parents=True, exist_ok=True)
+    # output_path = output_dir / "cme_difference.pdf"
+    # plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    # print(f"\nFigure saved to: {output_path}")
     
     plt.show()
 
@@ -87,7 +123,7 @@ def main():
     seed = 1
     
     # Sample size
-    n_samples = 1000
+    n_samples = 200
     
     # Sample from P and Q
     X_p, Y = sample_joint(
@@ -104,7 +140,7 @@ def main():
     true_diff = 0.5 * x_eval**2
     
     # Set bandwidth 
-    bandwidth = 100
+    bandwidth = 2.0
     
     # Regularization parameter
     lam_p = 1e-3
@@ -115,33 +151,28 @@ def main():
     cme_Z = cme_model(x_eval, X_q, Z, lam_q, gaussian_kernel, bandwidth=bandwidth)
     standard_cme_diff = cme_Y - cme_Z
 
-    # split data into train and test sets for DR estimation
-    n_test = n_samples // 2
-    X_p_train, Y_train = X_p[:n_test], Y[:n_test]
-    X_q_train, Z_train = X_q[:n_test], Z[:n_test]
-    X_p_test, Y_test = X_p[n_test:], Y[n_test:]
-    X_q_test, Z_test = X_q[n_test:], Z[n_test:]
-
-    # Merge test set 
-    X_test = np.concatenate([X_p_test, X_q_test])
-    YZ_test = np.concatenate([Y_test, Z_test])
+    # merge data for DR estimation
+    X_test = np.concatenate([X_p, X_q])
+    YZ_test = np.concatenate([Y, Z])
     
-    # T indicates which samples are from P (T=1) vs Q (T=0)
-    T = np.concatenate([np.ones_like(Y_test), np.zeros_like(Z_test)])
+    # # T indicates which samples are from P (T=1) vs Q (T=0)
+    T = np.concatenate([np.ones_like(Y), np.zeros_like(Z)])
 
-    # Compute Propensity scores on test set
+    # # Compute Propensity scores on test set
     E = propensity(X_test)
 
-    # CME models for Y and Z
-    cme_Y_train = cme_model(X_test, X_p_train, Y_train, lam_p, gaussian_kernel, bandwidth=bandwidth)
-    cme_Z_train = cme_model(X_test, X_q_train, Z_train, lam_q, gaussian_kernel, bandwidth=bandwidth)
+    # # CME models for Y and Z
+    cme_Y_train = cme_model(X_test, X_p, Y, lam_p, gaussian_kernel, bandwidth=bandwidth)
+    cme_Z_train = cme_model(X_test, X_q, Z, lam_q, gaussian_kernel, bandwidth=bandwidth)
 
     # RKHS difference psuedo-outcome for doubly robust estimation
     psuedo_outcome = (T - E) / (E * (1 - E)) * (YZ_test - (1 - E) * cme_Y_train - E * cme_Z_train)
 
+    plot_cme_data(x_eval, cme_Y, cme_Z, X_p, Y, X_q, Z)
+
     # Compute doubly robust CME difference
-    bandwidth_dr = 1
-    dr_cme_diff = cme_model(x_eval, X_test, psuedo_outcome, lam_p, gaussian_kernel, bandwidth=bandwidth_dr)
+    bandwidth_dr = bandwidth
+    dr_cme_diff = cme_model(x_eval, X_test, psuedo_outcome, 10*lam_p, gaussian_kernel, bandwidth=bandwidth_dr)
     
     # Plot results
     plot_cme_difference(x_eval, true_diff, standard_cme_diff, dr_cme_diff)
