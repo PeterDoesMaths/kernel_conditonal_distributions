@@ -4,7 +4,7 @@ Plot squared error of CMMD1 estimators for standard vs doubly robust methods.
 
 import numpy as np
 import matplotlib.pyplot as plt
-from typing import Callable, Tuple
+from typing import Tuple
 import sys
 import os
 from sklearn.kernel_ridge import KernelRidge
@@ -15,8 +15,8 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 sys.path.insert(0, project_root)
 
-from src.cmmd import CMMD1
-from src.kernels import gaussian_kernel, indicator_kernel
+from src.cmmd import CMMD1, CMMD1_dr
+from src.kernels import polynomial_kernel, linear_kernel
 from src.dr_models import (
 	sample_joint,
 	sample_covariate_p,
@@ -31,7 +31,6 @@ def fit_krr_predict(
 	x_train: np.ndarray,
 	y_train: np.ndarray,
 	x_test: np.ndarray,
-	bandwidth: float,
 	label: str,
 	alpha_grid: np.ndarray | None = None,
 	cv: int = 5,
@@ -40,14 +39,13 @@ def fit_krr_predict(
 	Fit KernelRidge with CV over alpha and predict on x_test.
 	"""
 	if alpha_grid is None:
-		alpha_grid = np.logspace(-4, 1, 12)
+		alpha_grid = np.logspace(-4, 1, 5)
 
 	x_train_2d = x_train.reshape(-1, 1) if x_train.ndim == 1 else x_train
 	x_test_2d = x_test.reshape(-1, 1) if x_test.ndim == 1 else x_test
 	y_train_1d = y_train.ravel()
 
-	gamma = 0.5 * bandwidth
-	krr = KernelRidge(kernel="rbf", gamma=gamma)
+	krr = KernelRidge(kernel="polynomial", degree=2, coef0=1, gamma=1)
 
 	search = GridSearchCV(
 		estimator=krr,
@@ -75,49 +73,85 @@ def true_cmmd(n_samples: int = 2000) -> float:
 
 def compute_cmmd1_estimates(
 	n_samples: int,
-	bandwidth: float,
 	seed: int
 ) -> Tuple[float, float]:
 	"""
 	Compute standard and doubly robust CMMD1^2 estimates for one trial.
 	"""
 
+	cmmd1_standard_stat = CMMD1()
+	cmmd1_dr_stat = CMMD1_dr()
+
 	X_P, Y = sample_joint(n_samples, sample_covariate_p, conditional_y, seed=seed)
 	X_Q, Z = sample_joint(n_samples, sample_covariate_q, conditional_z, seed=seed + 1)
 
-	X_test = np.concatenate([X_P, X_Q])
-	YZ_test = np.concatenate([Y, Z])
-	T = np.concatenate([np.ones_like(Y), np.zeros_like(Z)])
+	# Ensure data is 2D for kernel computation
+	X_P = X_P.reshape(-1, 1)
+	Y = Y.reshape(-1, 1)
+	X_Q = X_Q.reshape(-1, 1)
+	Z = Z.reshape(-1, 1)
+	
+    # Fit KRR models for DR estimation
+	alpha_grid = {"alpha": np.logspace(-4, 1, 5)}
+	krr_y = GridSearchCV(
+		KernelRidge(kernel='polynomial', degree=2, coef0=1, gamma=1),
+		alpha_grid, cv=5)
+	krr_y.fit(X_P, Y.flatten())
 
-	E = propensity(X_test)
+	krr_z = GridSearchCV(KernelRidge(kernel='polynomial', degree=2, coef0=1, gamma=1), alpha_grid, cv=5)
+	krr_z.fit(X_Q, Z.flatten())
 
-	cme_Y = fit_krr_predict(
-		x_train=X_P,
-		y_train=Y,
-		x_test=X_test,
-		bandwidth=bandwidth,
-		label="E[Y|X]",
+	alpha_p = float(krr_y.best_params_["alpha"])
+	alpha_q = float(krr_z.best_params_["alpha"])
+	lam_p = alpha_p / X_P.shape[0]
+	lam_q = alpha_q / X_Q.shape[0]
+
+	stat_standard = cmmd1_standard_stat.compute(
+		X_P, Y, X_Q, Z,
+		lam_p, lam_q,
+		polynomial_kernel,
+		linear_kernel
 	)
-	cme_Z = fit_krr_predict(
-		x_train=X_Q,
-		y_train=Z,
-		x_test=X_test,
-		bandwidth=bandwidth,
-		label="E[Z|X]",
+
+	# Build pseudo-outcomes on pooled training data, then tune KRR alpha for DR lambda
+	X_train = np.concatenate([X_P, X_Q], axis=0)
+	YZ_train = np.concatenate([Y.flatten(), Z.flatten()])
+	T_train = np.concatenate([
+		np.ones(X_P.shape[0], dtype=float),
+		np.zeros(X_Q.shape[0], dtype=float),
+	])
+	E_train = propensity(X_train.flatten())
+
+	mu_y_train = krr_y.predict(X_train)
+	mu_z_train = krr_z.predict(X_train)
+	pseudo_outcome_train = (T_train - E_train) / (E_train * (1 - E_train)) * (
+		YZ_train - (1 - E_train) * mu_y_train - E_train * mu_z_train
 	)
 
-	stat_standard = np.mean((cme_Y - cme_Z) ** 2)
-
-	pseudo_outcome = (T - E) / (E * (1 - E)) * (YZ_test - (1 - E) * cme_Y - E * cme_Z)
-
-	dr_cme_diff = fit_krr_predict(
-		x_train=X_test,
-		y_train=pseudo_outcome,
-		x_test=X_test,
-		bandwidth=bandwidth,
-		label="DR correction",
+	krr_dr = GridSearchCV(
+		KernelRidge(kernel='polynomial', degree=2, coef0=1, gamma=1),
+		alpha_grid, cv=5,
 	)
-	stat_dr = np.mean(dr_cme_diff**2)
+	krr_dr.fit(X_train, pseudo_outcome_train)
+	alpha_dr = float(krr_dr.best_params_["alpha"])
+	lam_dr = alpha_dr / X_train.shape[0]
+
+	# Create callable model functions
+	def cme_y(X):
+		return krr_y.predict(X.reshape(-1, 1) if X.ndim == 1 else X)
+
+	def cme_z(X):
+		return krr_z.predict(X.reshape(-1, 1) if X.ndim == 1 else X)
+	
+	stat_kwargs={"propensity": propensity, "cme_y": cme_y, "cme_z": cme_z}
+
+	stat_dr = cmmd1_dr_stat.compute(
+		X_P, Y, X_Q, Z,
+		lam_dr, lam_dr,
+		polynomial_kernel,
+		linear_kernel,
+		**stat_kwargs,
+	)
 
 	return stat_standard, stat_dr
 
@@ -125,7 +159,6 @@ def compute_cmmd1_estimates(
 def run_error_experiment(
 	sample_sizes: np.ndarray,
 	n_trials: int,
-	bandwidth: float,
 	true_samples: int = 2000,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
 	"""
@@ -140,7 +173,6 @@ def run_error_experiment(
 
 	print("Running CMMD1 squared-error experiment")
 	print(f"  - trials per size: {n_trials}")
-	print(f"  - bandwidth: {bandwidth:.4f}")
 	print()
 
 	for i, n_samples in enumerate(sample_sizes):
@@ -150,7 +182,6 @@ def run_error_experiment(
 		for trial in range(n_trials):
 			stat_standard, stat_dr = compute_cmmd1_estimates(
 				n_samples=n_samples,
-				bandwidth=bandwidth,
 				seed=trial * 5 + n_samples,
 			)
 
@@ -175,8 +206,7 @@ def plot_error_curves(
 	standard_errors: np.ndarray,
 	dr_errors: np.ndarray,
 	standard_se: np.ndarray,
-	dr_se: np.ndarray,
-	bandwidth: float
+	dr_se: np.ndarray
 ):
 	"""
 	Plot squared error vs number of samples for both estimators.
@@ -190,7 +220,7 @@ def plot_error_curves(
 		marker="o",
 		linestyle="-",
 		color="blue",
-		label="Standard",
+		label="Standard Estimator",
 		linewidth=2,
 	)
 	ax.errorbar(
@@ -200,16 +230,16 @@ def plot_error_curves(
 		marker="o",
 		linestyle="-",
 		color="red",
-		label="Doubly Robust",
+		label="DR Estimator",
 		linewidth=2,
 	)
 
+	ax.set_title("CMMD$_1$ Error", fontsize=36)
 	ax.set_xlabel("Sample Size ($n$)", fontsize=30)
-	ax.set_ylabel("CMMD$_1$ error", fontsize=30)
-	ax.set_title(f"Bandwidth h={bandwidth:.1f}", fontsize=36)
+	ax.set_ylabel("Squared Error", fontsize=30)
 	ax.tick_params(axis="both", which="major", labelsize=21)
 	ax.grid(True, alpha=0.3)
-	ax.legend(fontsize=24)
+	ax.legend(fontsize=18)
 
 	plt.tight_layout()
 
@@ -218,23 +248,19 @@ def plot_error_curves(
 
 if __name__ == "__main__":
 	sample_sizes = np.array([100, 200, 300, 400, 500])
-	bandwidth = 0.1
 	n_trials = 100
 
 	standard_errors, dr_errors, standard_se, dr_se = run_error_experiment(
 		sample_sizes=sample_sizes,
-		n_trials=n_trials,
-		bandwidth=bandwidth
+		n_trials=n_trials
 	)
 
 	fig, ax = plot_error_curves(
-		sample_sizes, standard_errors, dr_errors, standard_se, dr_se, bandwidth=bandwidth
-	)
+		sample_sizes, standard_errors, dr_errors, standard_se, dr_se)
 
-	# Save figure (optional)
 	figs_dir = os.path.join(script_dir, "..", "figs", "dr")
 	os.makedirs(figs_dir, exist_ok=True)
-	fig_path = os.path.join(figs_dir, f"cmmd1_squared_error_h{bandwidth}.pdf")
+	fig_path = os.path.join(figs_dir, f"cmmd1_error.pdf")
 	fig.savefig(fig_path, dpi=300, bbox_inches="tight")
 	print(f"\nFigure saved to: {fig_path}")
 

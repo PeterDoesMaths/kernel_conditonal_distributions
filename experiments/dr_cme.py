@@ -21,7 +21,6 @@ from src.dr_models import sample_joint, sample_covariate_p, sample_covariate_q, 
 def cme_model(
     X: np.ndarray,
     Y: np.ndarray,
-    bandwidth: float,
     alpha_grid: Optional[np.ndarray] = None,
     cv: int = 5,
 ) -> KernelRidge:
@@ -34,8 +33,6 @@ def cme_model(
         Training covariates.
     Y : np.ndarray, shape (n,) or (n, 1)
         Training responses.
-    bandwidth : float
-        User-provided kernel bandwidth.
     alpha_grid : np.ndarray, optional
         Candidate regularization values for CV.
     cv : int, default=5
@@ -51,13 +48,12 @@ def cme_model(
 
     x_train_2d = X.reshape(-1, 1) if X.ndim == 1 else X
     y_train_1d = Y.ravel()
-    gamma = 0.5 * bandwidth
 
-    base_model = KernelRidge(kernel="polynomial", degree=2, coef0=1, gamma=gamma)
+    base_model = KernelRidge(kernel="polynomial", degree=2, coef0=1, gamma=1)
     cv_folds = min(cv, x_train_2d.shape[0])
 
     if cv_folds < 2:
-        fallback_model = KernelRidge(kernel="rbf", gamma=gamma, alpha=float(alpha_grid[0]))
+        fallback_model = KernelRidge(kernel="polynomial", degree=2, coef0=1, gamma=1, alpha=float(alpha_grid[0]))
         fallback_model.fit(x_train_2d, y_train_1d)
         return fallback_model
 
@@ -133,33 +129,33 @@ def plot_cme_difference(x_eval: np.ndarray, true_diff: np.ndarray, standard_cme_
             linewidth=2, alpha=0.7, color='black')
     ax.plot(x_eval, standard_cme_diff, label="Standard Estimator", 
             linewidth=2, color='blue')
-    ax.plot(x_eval, dr_cme_diff, label="Doubly Robust Estimator", 
+    ax.plot(x_eval, dr_cme_diff, label="DR Estimator", 
             linewidth=2, color='red')
-    ax.set_xlabel("$x$", fontsize=20)
-    ax.set_ylabel(r"$\mu_{Y|x} - \mu_{Z|x}$", fontsize=20)
-    ax.set_title("Difference in Conditional Mean Embeddings", fontsize=24)
-    ax.tick_params(axis="both", which="major", labelsize=14)
-    ax.legend(fontsize=16)
+    ax.set_xlabel("$x$", fontsize=30)
+    ax.set_ylabel(r"$\mu_{Y|x} - \mu_{Z|x}$", fontsize=30)
+    ax.set_title("Difference in CMEs", fontsize=36)
+    ax.tick_params(axis="both", which="major", labelsize=21)
+    ax.legend(fontsize=18)
     ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
     
     # Save figure
-    # output_dir = Path(__file__).parent.parent / "figs" / "dr"
-    # output_dir.mkdir(parents=True, exist_ok=True)
-    # output_path = output_dir / "cme_difference.pdf"
-    # plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    # print(f"\nFigure saved to: {output_path}")
+    output_dir = Path(__file__).parent.parent / "figs" / "dr"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "cme_difference.pdf"
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f"\nFigure saved to: {output_path}")
     
     plt.show()
 
 
 def main():
     # Set random seed for reproducibility
-    seed = 1
+    seed = 123
     
     # Sample size
-    n_samples = 100
+    n_samples = 500
     
     # Sample from P and Q
     X_p, Y = sample_joint(
@@ -175,12 +171,9 @@ def main():
     # True conditional mean difference
     true_diff = 0.5 * x_eval**2
     
-    # Set bandwidth 
-    bandwidth = 2.0
-    
     # Fit CME models once
-    model_Y = cme_model(X_p, Y, bandwidth=bandwidth)
-    model_Z = cme_model(X_q, Z, bandwidth=bandwidth)
+    model_Y = cme_model(X_p, Y)
+    model_Z = cme_model(X_q, Z)
 
     x_eval_2d = x_eval.reshape(-1, 1)
 
@@ -210,7 +203,7 @@ def main():
     plot_cme_data(x_eval, cme_Y, cme_Z, X_p, Y, X_q, Z)
 
     # Compute doubly robust CME difference
-    model_dr = cme_model(X_test, psuedo_outcome, bandwidth=bandwidth)
+    model_dr = cme_model(X_test, psuedo_outcome)
 
     peudo_cme_diff = model_dr.predict(X_test_2d)
     plot_pseudo_outcome(X_test, psuedo_outcome, peudo_cme_diff)

@@ -27,7 +27,7 @@ def sample_covariate_p(n: int, seed: int = None) -> np.ndarray:
 
 def sample_covariate_q(n: int, seed: int = None) -> np.ndarray:
     """
-    Sample covariates from the base distribution X ~ Beta(2, 2).
+    Sample covariates from the base distribution X ~ Beta(0.5, 0.5).
     
     Parameters
     ----------
@@ -42,13 +42,12 @@ def sample_covariate_q(n: int, seed: int = None) -> np.ndarray:
         Covariate samples.
     """
     rng = np.random.default_rng(seed)
-    return rng.beta(2, 2, size=n)
+    return rng.beta(0.5, 0.5, size=n)
 
 
 def conditional_y(X: np.ndarray, seed: int = None) -> np.ndarray:
     """
-    Sample from conditional distribution Y|X = cos(12X) + 0.5X^2 + Noise
-    # P(Y=1|X) = 0.25cos(12X) + 0.5X^2 + 0.25
+    Sample from conditional distribution Y|X = cos(4 pi X) + 0.5X^2 + Noise
     
     Parameters
     ----------
@@ -64,15 +63,13 @@ def conditional_y(X: np.ndarray, seed: int = None) -> np.ndarray:
     """
     rng = np.random.default_rng(seed)
     n = len(X)
-    # prob = 0.25 * np.cos(12 * X) + 0.5 * X**2 + 0.25
-    # Y = rng.binomial(1, prob, size=n)
     Y = np.cos(4 * np.pi * X) + 0.5 * X**2 + rng.normal(0, 0.5, size=n)
     return Y
 
 
 def conditional_z(X: np.ndarray, seed: int = None) -> np.ndarray:
     """
-    Sample from conditional distribution Q(Z=1|X) = 0.25cos(12X) + 0.25
+    Sample from conditional distribution Z|X = cos(4 pi X) + Noise
     
     Parameters
     ----------
@@ -88,8 +85,6 @@ def conditional_z(X: np.ndarray, seed: int = None) -> np.ndarray:
     """
     rng = np.random.default_rng(seed)
     n = len(X)
-    # prob = 0.25 * np.cos(12 * X) + 0.25
-    # Z = rng.binomial(1, prob, size=n)
     Z = np.cos(4 * np.pi * X) + rng.normal(0, 0.5, size=n)
     return Z
 
@@ -134,7 +129,7 @@ def propensity(X: np.ndarray) -> np.ndarray:
     """
     Propensity score function.
 
-    e(x) = p(x)/(p(X) + q(x)) = 0.5 * (1 / (1 + 6(x-x^2)))
+    e(x) = 1 / (1 + (1/π) * x^(-0.5) * (1-x)^(-0.5)) for Beta(0.5, 0.5) vs Uniform(0, 1)
     
     Parameters
     ----------
@@ -147,7 +142,9 @@ def propensity(X: np.ndarray) -> np.ndarray:
         Propensity scores in (0, 1).
     """
     X = np.asarray(X).flatten()
-    e = 0.5 * (1 / (1 + 6 * (X - X**2)))
+    e = (1 / (1 + (1 / np.pi) * X**(-0.5) * (1 - X)**(-0.5)))
+    # Clip to avoid extreme values
+    e = np.clip(e, 1e-1, 1 - 1e-1)
     return e
 
 if __name__ == "__main__":

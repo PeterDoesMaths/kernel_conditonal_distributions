@@ -13,9 +13,11 @@ project_root = os.path.dirname(script_dir)
 sys.path.insert(0, project_root)
 
 from src.cmmd import CMMD0, CMMD1, CMMD2, CMMD0_dr, CMMD1_dr, CMMD2_dr, Test_Diff_Marginal
-from src.kernels import gaussian_kernel, kronecker_delta_kernel
+# from src.kernels import gaussian_kernel, kronecker_delta_kernel
+from src.kernels import polynomial_kernel, linear_kernel
 from src.dr_models import sample_joint, sample_covariate_p, sample_covariate_q, conditional_y, conditional_z, propensity
 from sklearn.kernel_ridge import KernelRidge
+from sklearn.model_selection import GridSearchCV
 
 def run_power_experiment(
 	error: str,
@@ -23,7 +25,6 @@ def run_power_experiment(
 	n_trials: int = 250,
 	alpha: float = 0.05,
 	B: int = 250,
-	bandwidth: float | None = 1.0,
 	seed: int = 42
 ) -> dict[str, np.ndarray]:
 	"""
@@ -59,39 +60,6 @@ def run_power_experiment(
 		reject1_dr = 0
 		reject2_dr = 0
 
-		lam_p = 0.01 * n**(-0.25)
-		lam_q = 0.01 * n**(-0.25)
-
-		# P: Y|X
-		X_P_train, Y_train = sample_joint(n, sample_covariate_p, conditional_y, seed=i)
-		
-		# Q: Z|X
-		if error == "type1":
-			X_Q_train, Z_train = sample_joint(n, sample_covariate_q, conditional_y, seed=i+1)
-		else:
-			X_Q_train, Z_train = sample_joint(n, sample_covariate_q, conditional_z, seed=i+2)
-
-		# ensure data is 2D for kernel computation
-		X_P_train = X_P_train.reshape(-1, 1)
-		Y_train = Y_train.reshape(-1, 1)
-		X_Q_train = X_Q_train.reshape(-1, 1)
-		Z_train = Z_train.reshape(-1, 1)
-
-		# Fit KRR models for DR estimation
-		alpha_krr = lam_p * n  # sklearn uses alpha instead of lam*n
-		krr_y = KernelRidge(alpha=alpha_krr, kernel='rbf', gamma=0.5*bandwidth)
-		krr_y.fit(X_P_train, Y_train.flatten())
-		
-		krr_z = KernelRidge(alpha=alpha_krr, kernel='rbf', gamma=0.5*bandwidth)
-		krr_z.fit(X_Q_train, Z_train.flatten())
-		
-		# Create callable model functions
-		def cme_y(X):
-			return krr_y.predict(X.reshape(-1, 1) if X.ndim == 1 else X)
-		
-		def cme_z(X):
-			return krr_z.predict(X.reshape(-1, 1) if X.ndim == 1 else X)
-
 		for trial in range(n_trials):
 			seed_perm = int(rng.integers(1, 2**31))
 
@@ -110,6 +78,51 @@ def run_power_experiment(
 			X_Q = X_Q.reshape(-1, 1)
 			Z = Z.reshape(-1, 1)
 
+			# Fit KRR models for DR estimation
+			alpha_grid = {"alpha": np.logspace(-4, 1, 5)}
+			krr_y = GridSearchCV(
+				KernelRidge(kernel='polynomial', degree=2, coef0=1, gamma=1),
+				alpha_grid, cv=5)
+			krr_y.fit(X_P, Y.flatten())
+			
+			krr_z = GridSearchCV(KernelRidge(kernel='polynomial', degree=2, coef0=1, gamma=1), alpha_grid, cv=5)
+			krr_z.fit(X_Q, Z.flatten())
+
+			alpha_p = float(krr_y.best_params_["alpha"])
+			alpha_q = float(krr_z.best_params_["alpha"])
+			lam_p = alpha_p / X_P.shape[0]
+			lam_q = alpha_q / X_Q.shape[0]
+
+			# Build pseudo-outcomes on pooled training data, then tune KRR alpha for DR lambda
+			X_train = np.concatenate([X_P, X_Q], axis=0)
+			YZ_train = np.concatenate([Y.flatten(), Z.flatten()])
+			T_train = np.concatenate([
+				np.ones(X_P.shape[0], dtype=float),
+				np.zeros(X_Q.shape[0], dtype=float),
+			])
+			E_train = propensity(X_train.flatten())
+
+			mu_y_train = krr_y.predict(X_train)
+			mu_z_train = krr_z.predict(X_train)
+			pseudo_outcome_train = (T_train - E_train) / (E_train * (1 - E_train)) * (
+				YZ_train - (1 - E_train) * mu_y_train - E_train * mu_z_train
+			)
+
+			krr_dr = GridSearchCV(
+				KernelRidge(kernel='polynomial', degree=2, coef0=1, gamma=1),
+				alpha_grid, cv=5,
+			)
+			krr_dr.fit(X_train, pseudo_outcome_train)
+			alpha_dr = float(krr_dr.best_params_["alpha"])
+			lam_dr = alpha_dr / X_train.shape[0]
+			
+			# Create callable model functions
+			def cme_y(X):
+				return krr_y.predict(X.reshape(-1, 1) if X.ndim == 1 else X)
+			
+			def cme_z(X):
+				return krr_z.predict(X.reshape(-1, 1) if X.ndim == 1 else X)
+
 			# Prepare kwargs for test method
 			algo_kwargs = {
 				"alpha": alpha,
@@ -117,18 +130,26 @@ def run_power_experiment(
 				"lam_p": lam_p,
 				"lam_q": lam_q,
 				"random_state": seed_perm,
+				"propensity_fn": propensity,
 			}
-			stat_kwargs = {
-				"bandwidth": bandwidth,
+			algo_kwargs_dr = {
+				**algo_kwargs,
+				"lam_p": lam_dr,
+				"lam_q": lam_dr,
+				"propensity_fn": propensity,
 			}
+			# stat_kwargs = {
+			# 	"bandwidth": bandwidth,
+			# }
+			stat_kwargs = {}
 			# Add propensity function if using different marginals
-			algo_kwargs["propensity_fn"] = propensity
+			# algo_kwargs["propensity_fn"] = propensity
 
 			_, p0 = algo.test(
 				X_P, Y, X_Q, Z,
 				cmmd0_stat,
-				gaussian_kernel,
-				kronecker_delta_kernel,
+				polynomial_kernel,
+				linear_kernel,
 				algo_kwargs=algo_kwargs,
 				stat_kwargs=stat_kwargs,
 			)
@@ -136,41 +157,41 @@ def run_power_experiment(
 			_, p1 = algo.test(
 				X_P, Y, X_Q, Z,
 				cmmd1_stat,
-				gaussian_kernel,
-				kronecker_delta_kernel,
+				polynomial_kernel,
+				linear_kernel,
 				algo_kwargs={**algo_kwargs, "random_state": seed_perm + 1},
 				stat_kwargs=stat_kwargs,
 			)
 			_, p2 = algo.test(
 				X_P, Y, X_Q, Z,
 				cmmd2_stat,
-				gaussian_kernel,
-				kronecker_delta_kernel,
+				polynomial_kernel,
+				linear_kernel,
 				algo_kwargs={**algo_kwargs, "random_state": seed_perm + 2},
 				stat_kwargs={**stat_kwargs, "estimator": "cmmd"},
 			)
 			_, p0_dr = algo.test(
 				X_P, Y, X_Q, Z,
 				cmmd0_stat_dr,
-				gaussian_kernel,
-				kronecker_delta_kernel,
-				algo_kwargs=algo_kwargs,
+				polynomial_kernel,
+				linear_kernel,
+				algo_kwargs=algo_kwargs_dr,
 				stat_kwargs={**stat_kwargs, "propensity": propensity, "cme_y": cme_y, "cme_z": cme_z},
 			)
 			_, p1_dr = algo.test(
 				X_P, Y, X_Q, Z,
 				cmmd1_stat_dr,
-				gaussian_kernel,
-				kronecker_delta_kernel,
-				algo_kwargs={**algo_kwargs, "random_state": seed_perm + 1},
+				polynomial_kernel,
+				linear_kernel,
+				algo_kwargs={**algo_kwargs_dr, "random_state": seed_perm + 1},
 				stat_kwargs={**stat_kwargs, "propensity": propensity, "cme_y": cme_y, "cme_z": cme_z},
 			)
 			_, p2_dr = algo.test(
 				X_P, Y, X_Q, Z,
 				cmmd2_stat_dr,
-				gaussian_kernel,
-				kronecker_delta_kernel,
-				algo_kwargs={**algo_kwargs, "random_state": seed_perm + 2},
+				polynomial_kernel,
+				linear_kernel,
+				algo_kwargs={**algo_kwargs_dr, "random_state": seed_perm + 2},
 				stat_kwargs={**stat_kwargs, "propensity": propensity, "cme_y": cme_y, "cme_z": cme_z},
 			)
 			reject0 += int(p0 < alpha)
@@ -230,22 +251,33 @@ def plot_power_vs_sample_size(
 	if error == "type1":
 		ax.axhline(0.05, color="black", linestyle="--")
 
-	ax.plot(sample_sizes, results["cmmd0"], marker="o", label="CMMD$_0$")
-	ax.plot(sample_sizes, results["cmmd1"], marker="s", label="CMMD$_1$")
-	ax.plot(sample_sizes, results["cmmd2"], marker="^", label="CMMD$_2$")
-	ax.plot(sample_sizes, results["cmmd0_dr"], marker="o", linestyle="--", label="CMMD$_0$ DR", color="C0")
-	ax.plot(sample_sizes, results["cmmd1_dr"], marker="s", linestyle="--", label="CMMD$_1$ DR", color="C1")
-	ax.plot(sample_sizes, results["cmmd2_dr"], marker="^", linestyle="--", label="CMMD$_2$ DR", color="C2")
-
-	ax.set_xlabel("Sample size ($n$)", fontsize=20)
 	if error == "type1":
+		linewidth = 1.5
+	elif error == "type2":
+		linewidth = 2
+
+	ax.plot(sample_sizes, results["cmmd0"], marker="o", label="CMMD$_0$", linewidth=linewidth)
+	ax.plot(sample_sizes, results["cmmd1"], marker="s", label="CMMD$_1$", linewidth=linewidth)
+	ax.plot(sample_sizes, results["cmmd2"], marker="^", label="CMMD$_2$", linewidth=linewidth)
+	ax.plot(sample_sizes, results["cmmd0_dr"], marker="o", linestyle="--", label="CMMD$_0$ DR", color="C0", linewidth=linewidth)
+	ax.plot(sample_sizes, results["cmmd1_dr"], marker="s", linestyle="--", label="CMMD$_1$ DR", color="C1", linewidth=linewidth)
+	ax.plot(sample_sizes, results["cmmd2_dr"], marker="^", linestyle="--", label="CMMD$_2$ DR", color="C2", linewidth=linewidth)
+
+
+	if error == "type1":
+		ax.set_title("Hypothesis Testing", fontsize=24)
+		ax.set_xlabel("Sample size ($n$)", fontsize=20)
 		ax.set_ylabel("Type I Error", fontsize=20)
 		ax.set_ylim(0.0, 0.3)
-		ax.legend(fontsize=16)
+		ax.legend(fontsize=16, ncols=2)
+		ax.tick_params(axis="both", which="major", labelsize=14)
 	if error == "type2":
-		ax.set_ylabel("Power", fontsize=20)
+		ax.set_title("Hypothesis Testing", fontsize=36)
+		ax.set_xlabel("Sample size ($n$)", fontsize=30)
+		ax.set_ylabel("Power", fontsize=30)
 		ax.set_ylim(0.0, 1.1)
-	ax.tick_params(axis="both", which="major", labelsize=14)
+		ax.legend(fontsize=18, loc=[0.3, 0.4], ncols=2)
+		ax.tick_params(axis="both", which="major", labelsize=21)
 	ax.grid(True, alpha=0.3)
 
 	plt.tight_layout()
@@ -254,9 +286,9 @@ def plot_power_vs_sample_size(
 
 
 if __name__ == "__main__":
-	sample_sizes = [10, 50, 100, 150, 200, 250]
-	# error = "type1"
-	error = "type2"
+	sample_sizes = [100, 200, 300, 400, 500]
+	error = "type1"
+	# error = "type2"
 
 	results = run_power_experiment(
 		error=error,
@@ -264,16 +296,15 @@ if __name__ == "__main__":
 		n_trials=50,
 		alpha=0.05,
 		B=50,
-		bandwidth=0.5,
 		seed=42,
 	)
 
 	fig, _ = plot_power_vs_sample_size(sample_sizes, results, error=error)
 
-	# figs_dir = os.path.join(project_root, "figs/dr")
-	# os.makedirs(figs_dir, exist_ok=True)
-	# fig_path = os.path.join(figs_dir, f"{error}_vs_sample_size_full_bw05.pdf")
-	# fig.savefig(fig_path, dpi=300, bbox_inches="tight")
-	# print(f"Figure saved to: {fig_path}")
+	figs_dir = os.path.join(project_root, "figs/dr")
+	os.makedirs(figs_dir, exist_ok=True)
+	fig_path = os.path.join(figs_dir, f"{error}_vs_sample_size.pdf")
+	fig.savefig(fig_path, dpi=300, bbox_inches="tight")
+	print(f"Figure saved to: {fig_path}")
 
 	plt.show()
