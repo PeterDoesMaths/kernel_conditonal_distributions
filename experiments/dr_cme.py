@@ -103,7 +103,7 @@ def plot_cme_data(x_eval: np.ndarray, cme_Y: np.ndarray, cme_Z: np.ndarray, X_p:
     ax_z.scatter(X_q, Z, label="Q samples", alpha=0.5, color='pink', edgecolor='k', s=50)
     ax_z.set_xlabel("$X$", fontsize=30)
     ax_z.set_ylabel("$Z$", fontsize=30)
-    ax_z.set_title("CME for $P_{Z|X}$", fontsize=36)
+    ax_z.set_title("CME for $Q_{Z|X}$", fontsize=36)
     ax_z.tick_params(axis="both", which="major", labelsize=21)
     ax_z.legend(fontsize=24, loc='upper left')
     ax_z.grid(True, alpha=0.3)
