@@ -124,6 +124,43 @@ def kronecker_delta_kernel(X: np.ndarray, Y: Optional[np.ndarray] = None, **kwar
     
     return K
 
+def polynomial_kernel(X: np.ndarray, Y: Optional[np.ndarray] = None, degree: int = 2, coef0: float = 1.0, gamma: float = 1.0) -> np.ndarray:
+    """
+    Compute the polynomial kernel matrix.
+    
+    k(x, y) = (gamma * <x, y> + coef0)^degree
+    
+    Parameters
+    ----------
+    X : np.ndarray, shape (n, d) or (n,)
+        First set of samples. If 1D, will be reshaped to (n, 1).
+    Y : np.ndarray, shape (m, d) or (m,), optional
+        Second set of samples. If None, computes k(X, X).
+        If 1D, will be reshaped to (m, 1).
+    degree : int, default=2
+        Degree of the polynomial kernel.
+    coef0 : float, default=1.0
+        Independent term in the polynomial kernel.
+    gamma : float, default=1.0
+        Scaling factor for the inner product.
+    
+    Returns
+    -------
+    K : np.ndarray, shape (n, m) or (n, n)
+        Kernel matrix where K[i, j] = k(X[i], Y[j]).
+    """
+    if X.ndim == 1:
+        X = X.reshape(-1, 1)
+    
+    if Y is None:
+        Y = X
+    elif Y.ndim == 1:
+        Y = Y.reshape(-1, 1)
+    
+    K = (gamma * (X @ Y.T) + coef0) ** degree
+    
+    return K
+
 def linear_kernel(X: np.ndarray, Y: Optional[np.ndarray] = None, **kwargs) -> np.ndarray:
     """
     Compute the linear kernel matrix.
