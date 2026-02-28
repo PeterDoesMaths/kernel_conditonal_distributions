@@ -325,14 +325,15 @@ def plot_error_vs_sample_size(
     ax.set_xlabel("Sample size ($n$)", fontsize=20)
     
     if error == "type1":
-        # ax.set_title("MNIST: Type I Error under Covariate Shift", fontsize=20)
+        ax.set_title(r"$P_{Y|X} = Q_{Z|X}$", fontsize=24)
         ax.set_ylabel("Type I Error", fontsize=20)
-        ax.set_ylim([0.0, 1.1])
+        ax.set_ylim([0.0, 0.3])
         ax.legend(fontsize=16, loc="best")
     else:
-        # ax.set_title("MNIST: Power under Covariate Shift", fontsize=20)
+        ax.set_title(r"$P_{Y|X} \neq Q_{Z|X}$", fontsize=24)
         ax.set_ylabel("Power", fontsize=20)
         ax.set_ylim([0.0, 1.1])
+        ax.legend(fontsize=16, loc="best")
     
     ax.tick_params(axis="both", which="major", labelsize=14)
     ax.grid(True, alpha=0.3)
