@@ -165,9 +165,9 @@ if __name__ == "__main__":
 	results = run_power_experiment(
 		thetas = thetas,
 		sample_size=100,
-		n_trials=250,
+		n_trials=200,
 		alpha=0.05,
-		B=250,
+		B=200,
 		lam_p=0.1,
 		lam_q=0.1,
 		bandwidth=0.1,
