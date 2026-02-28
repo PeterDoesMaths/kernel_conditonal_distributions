@@ -287,15 +287,15 @@ def plot_power_vs_sample_size(
 
 if __name__ == "__main__":
 	sample_sizes = [100, 200, 300, 400, 500]
-	error = "type1"
-	# error = "type2"
+	# error = "type1"
+	error = "type2"
 
 	results = run_power_experiment(
 		error=error,
 		sample_sizes=sample_sizes,
-		n_trials=50,
+		n_trials=200,
 		alpha=0.05,
-		B=50,
+		B=200,
 		seed=42,
 	)
 
