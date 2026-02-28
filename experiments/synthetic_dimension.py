@@ -39,7 +39,7 @@ def sample_joint_theta_multidim(
 			n,
 			theta,
 			conditional_fn,
-			noise_std=0.1*(d+1)*noise_std,
+			noise_std=(0.1*d+1)*noise_std,
 			seed=seed_d,
 		)
 		X_cols.append(X_d)
