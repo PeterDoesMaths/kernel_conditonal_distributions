@@ -75,49 +75,70 @@ def plot_cme_data(x_eval: np.ndarray, cme_Y: np.ndarray, cme_Z: np.ndarray, X_p:
     true_y = np.cos(4 * np.pi * x_eval) + 0.5 * x_eval**2 
     true_z = np.cos(4 * np.pi * x_eval)
 
-    fig, axes = plt.subplots(1, 2, figsize=(16, 6), sharex=True)
-
     # plot 1, CME for Y with P samples
-    axes[0].plot(x_eval, cme_Y, label="CME Y|X", linewidth=2, color='blue')
-    axes[0].plot(x_eval, true_y, label="True Y|X", linewidth=2, color='black', linestyle='--')
-    axes[0].scatter(X_p, Y, label="P samples", alpha=0.5, color='blue', edgecolor='k', s=50)
-    axes[0].set_xlabel("$x$", fontsize=20)
-    axes[0].set_ylabel(r"$\mu_{Y|x}$", fontsize=20)
-    axes[0].set_title("Conditional Mean Embedding for Y|X", fontsize=20)
-    axes[0].tick_params(axis="both", which="major", labelsize=14)
-    axes[0].legend(fontsize=16)
-    axes[0].grid(True, alpha=0.3)
+    fig_y, ax_y = plt.subplots(figsize=(8, 6))
+    ax_y.plot(x_eval, cme_Y, label=r"$\hat \mu_{Y|x}$", linewidth=3, color='blue')
+    ax_y.plot(x_eval, true_y, label=r"$\mu_{Y|x}$", linewidth=3, color='black', linestyle='--')
+    ax_y.scatter(X_p, Y, label="P samples", alpha=0.5, color='lightblue', edgecolor='k', s=50)
+    ax_y.set_xlabel("$X$", fontsize=30)
+    ax_y.set_ylabel("$Y$", fontsize=30)
+    ax_y.set_title("CME for $P_{Y|X}$", fontsize=36)
+    ax_y.tick_params(axis="both", which="major", labelsize=21)
+    ax_y.legend(fontsize=24)
+    ax_y.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+    # save the first plot
+    output_dir = Path(__file__).parent.parent / "figs" / "dr"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "cme_y.pdf"
+    fig_y.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f"\nFigure saved to: {output_path}")
 
     # plot 2, CME for Z with Q samples
-    axes[1].plot(x_eval, cme_Z, label="CME Z|X", linewidth=2, color='red')
-    axes[1].plot(x_eval, true_z, label="True Z|X", linewidth=2, color='black', linestyle='--')
-    axes[1].scatter(X_q, Z, label="Q samples", alpha=0.5, color='red', edgecolor='k', s=50)
-    axes[1].set_xlabel("$x$", fontsize=20)
-    axes[1].set_ylabel(r"$\mu_{Z|x}$", fontsize=20)
-    axes[1].set_title("Conditional Mean Embedding for Z|X", fontsize=20)
-    axes[1].tick_params(axis="both", which="major", labelsize=14)
-    axes[1].legend(fontsize=16)
-    axes[1].grid(True, alpha=0.3)
-
+    fig_z, ax_z = plt.subplots(figsize=(8, 6))
+    ax_z.plot(x_eval, cme_Z, label=r"$\hat \mu_{Z|x}$", linewidth=3, color='red')
+    ax_z.plot(x_eval, true_z, label=r"$\mu_{Z|x}$", linewidth=3, color='black', linestyle='--')
+    ax_z.scatter(X_q, Z, label="Q samples", alpha=0.5, color='pink', edgecolor='k', s=50)
+    ax_z.set_xlabel("$X$", fontsize=30)
+    ax_z.set_ylabel("$Z$", fontsize=30)
+    ax_z.set_title("CME for $P_{Z|X}$", fontsize=36)
+    ax_z.tick_params(axis="both", which="major", labelsize=21)
+    ax_z.legend(fontsize=24, loc='upper left')
+    ax_z.grid(True, alpha=0.3)
     plt.tight_layout()
-
     plt.show()
+
+    # save the second plot
+    output_path = output_dir / "cme_z.pdf"
+    fig_z.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f"\nFigure saved to: {output_path}")
 
 def plot_pseudo_outcome(X_test: np.ndarray, pseudo_outcome: np.ndarray, peudo_cme_diff: np.ndarray):
     """Plot the pseudo-outcome used for doubly robust estimation.
     """
     fig, ax = plt.subplots(figsize=(8, 6))
     
-    sc = ax.scatter(X_test, pseudo_outcome, alpha=0.6, edgecolors='w')
-    ax.plot(np.sort(X_test), peudo_cme_diff[np.argsort(X_test)], color='red', linewidth=2, label='KRR Fit of Pseudo-outcome')
-    ax.set_xlabel("$x$", fontsize=20)
-    ax.set_ylabel("Pseudo-outcome", fontsize=20)
-    ax.set_title("Pseudo-outcome for Doubly Robust Estimation", fontsize=24)
-    ax.tick_params(axis="both", which="major", labelsize=14)
+    sc = ax.scatter(X_test, pseudo_outcome, label="Pseudo-outcome", alpha=0.5, color='plum', edgecolors='k', s=50)
+    ax.plot(np.sort(X_test), peudo_cme_diff[np.argsort(X_test)], color='indigo', linewidth=3, label=r'$\hat \Delta_{DR} k(\cdot, x)$')
+    ax.set_ylim(-6, 7)
+    ax.set_xlabel("$X$", fontsize=30)
+    ax.set_ylabel("$Y-Z$", fontsize=30)
+    ax.set_title("DR Estimation", fontsize=36)
+    ax.tick_params(axis="both", which="major", labelsize=21)
+    ax.legend(fontsize=24, loc='upper left')
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
     plt.show()
+
+    # save the pseudo-outcome plot
+    output_dir = Path(__file__).parent.parent / "figs" / "dr"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "pseudo_outcome.pdf"
+    fig.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f"\nFigure saved to: {output_path}")
 
 def plot_cme_difference(x_eval: np.ndarray, true_diff: np.ndarray, standard_cme_diff: np.ndarray, dr_cme_diff: np.ndarray):
     """
