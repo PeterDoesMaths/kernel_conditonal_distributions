@@ -137,6 +137,8 @@ def run_power_experiment(
 		results_cmmd1[i] = reject1 / n_trials
 		results_cmmd2[i] = reject2 / n_trials
 
+		print(f"Results for n={n}: CMMD0={results_cmmd0[i]:.3f}, CMMD1={results_cmmd1[i]:.3f}, CMMD2={results_cmmd2[i]:.3f}")
+
 	return {
 		"cmmd0": results_cmmd0,
 		"cmmd1": results_cmmd1,
@@ -166,11 +168,11 @@ def plot_power_vs_sample_size(
 	ax.set_xlabel("Sample size ($n$)", fontsize=20)
 	if error == "type1":
 		if setting == "same_marginal":
-			ax.set_title("$P_X = Q_X$", fontsize=20)
+			ax.set_title("$P_X = Q_X$", fontsize=24)
 		if setting == "diff_marginal":
-			ax.set_title("$P_X \\neq Q_X$", fontsize=20)
+			ax.set_title("$P_X \\neq Q_X$", fontsize=24)
 		ax.set_ylabel("Type I Error", fontsize=20)
-		ax.set_ylim(0.0, 1.0)
+		ax.set_ylim(0.0, 0.3)
 		ax.legend(fontsize=16)
 	if error == "type2":
 		ax.set_ylabel("Power", fontsize=20)
@@ -185,18 +187,18 @@ def plot_power_vs_sample_size(
 
 if __name__ == "__main__":
 	sample_sizes = [10, 50, 100, 150, 200, 250]
-	n_trials = 250
+	n_trials = 200
 	error = "type1"
 	# error = "type2"
-	setting = "same_marginal"
-	# setting = "diff_marginal"
+	# setting = "same_marginal"
+	setting = "diff_marginal"
 
 	results = run_power_experiment(
 		error=error,
 		sample_sizes=sample_sizes,
 		n_trials=n_trials,
 		alpha=0.05,
-		B=250,
+		B=200,
 		lam_p=0.1,
 		lam_q=0.1,
 		bandwidth=0.1,
