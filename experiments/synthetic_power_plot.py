@@ -25,7 +25,6 @@ def run_power_experiment(
 	B: int = 200,
 	lam_p: float = 0.1,
 	lam_q: float = 0.1,
-	bandwidth: float | None = 0.1,
 	noise_std: float = 0.3,
 	cmmd2_estimator: str = "jmmd",
 	seed: int = 42
@@ -68,6 +67,9 @@ def run_power_experiment(
 			Y = Y.reshape(-1, 1)
 			X_Q = X_Q.reshape(-1, 1)
 			Z = Z.reshape(-1, 1)
+
+			# get bandwidth for current dimension via median heuristic
+			bandwidth = median_heuristic(X_P)
 
 			# Prepare kwargs for test method
 			algo_kwargs = {
@@ -170,7 +172,6 @@ if __name__ == "__main__":
 		B=200,
 		lam_p=0.1,
 		lam_q=0.1,
-		bandwidth=0.1,
 		noise_std=0.5,
 		seed=42,
 	)
