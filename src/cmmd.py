@@ -59,6 +59,16 @@ def _compute_tilde_kernels(
     return K_Xp_Xtilde, K_Xq_Xtilde, K_Xtilde_Xtilde
 
 
+def _psd_matrix_power(K: np.ndarray, power: float) -> np.ndarray:
+    """
+    Compute K**power for a PSD matrix K via eigen-decomposition.
+    """
+    K_sym = 0.5 * (K + K.T)
+    eigenvalues, eigenvectors = np.linalg.eigh(K_sym)
+    eigenvalues = np.clip(eigenvalues, a_min=0.0, a_max=None)
+    return (eigenvectors * (eigenvalues ** power)) @ eigenvectors.T
+
+
 class TestStatistic(ABC):
     """
     Abstract base class for CMMD-based test statistics.
@@ -675,6 +685,69 @@ class CMMD2_primal(TestStatistic):
         
         return float(cmmd)
 
+
+class CMMDs(TestStatistic):
+    """
+    CMMDs test statistic.
+
+    Compares two conditional distributions P(Y|X) and Q(Z|X) using conditional mean embeddings.
+    
+    Uses pooled covariates \tilde{X} = (X, X')
+    """
+
+    # initialize with level parameter for smoothing matrix
+    def __init__(self, level: float = 0.5):
+        self.level = float(level)
+    
+    def compute(
+        self,
+        X_P: np.ndarray,
+        Y: np.ndarray,
+        X_Q: np.ndarray,
+        Z: np.ndarray,
+        lam_p: float,
+        lam_q: float,
+        kernel_x: Callable,
+        kernel_y: Callable | None = None,
+        **kwargs
+    ) -> float:
+        """
+        Compute CMMDs test statistic.
+        """
+        if kernel_y is None:
+            kernel_y = kernel_x
+        
+        n = X_P.shape[0]
+        m = X_Q.shape[0]
+
+        # Compute kernel matrices and inverses
+        K_XpXp, K_XqXq, _ = _compute_x_kernels(X_P, X_Q, kernel_x, **kwargs)
+        X_tilde = np.vstack([X_P, X_Q])
+        K_Xtilde_Xtilde = kernel_x(X_tilde, X_tilde, **kwargs) # (n+m, n+m)
+        L_YY, L_ZZ, L_YZ = _compute_yz_kernels(Y, Z, kernel_y, **kwargs)
+        W_Xp, W_Xq = _compute_w_matrices(K_XpXp, K_XqXq, lam_p, lam_q)
+
+        # Compute smoothing matrix
+        s = self.level
+        K = _psd_matrix_power(K_Xtilde_Xtilde, s + 1)
+
+        # Get projection matrices
+        P_Xp = np.concatenate([np.eye(n), np.zeros((n, m))], axis=1) # (n, n+m)
+        P_Xq = np.concatenate([np.zeros((m, n)), np.eye(m)], axis=1) # (m, n+m)
+
+        # Compute the three terms of the CMMD statistic
+        # Term 1: Tr(W_X L_YY W_X K_Xtilde K_tildeX)
+        term1 = np.trace(W_Xp @ L_YY @ W_Xp @ P_Xp @ K @ P_Xp.T)
+
+        # Term 2: -2 * Tr(W_X L_YZ W_X' K_X'tilde K_tildeX)
+        term2 = -2.0 * np.trace(W_Xp @ L_YZ @ W_Xq @ P_Xq @ K @ P_Xp.T)
+
+        # Term 3: Tr(W_X' L_ZZ W_X' K_X'tilde K_tildeX')
+        term3 = np.trace(W_Xq @ L_ZZ @ W_Xq @ P_Xq @ K @ P_Xq.T)
+
+        cmmd = (term1 + term2 + term3) / (n + m)
+
+        return float(cmmd)
 
 class Algorithm(ABC):
     """

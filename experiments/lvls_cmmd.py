@@ -12,9 +12,9 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 sys.path.insert(0, project_root)
 
-from src.cmmd import CMMD0, CMMD1, CMMD2, Test_Same_Marginal, Test_Diff_Marginal
+from src.cmmd import CMMD0, CMMD1, CMMD2, CMMDs, Test_Same_Marginal
 from src.kernels import gaussian_kernel, median_heuristic
-from src.models import sample_joint_theta, conditional_y, conditional_z, propensity
+from src.lvls_models import sample_joint, conditional_y, conditional_z
 
 
 def run_power_experiment(
@@ -32,9 +32,18 @@ def run_power_experiment(
 	"""
 	Estimate power (rejection rate) across theta values for CMMD tests.
 	"""
-	cmmd0_stat = CMMD0()
-	cmmd1_stat = CMMD1()
-	cmmd2_stat = CMMD2()
+	stat_configs = [
+		{"level": 0.0, "label": "CMMD$_0$", "stat": CMMD0(), "extra_stat_kwargs": {}},
+		{"level": 0.5, "label": "CMMD$_{0.5}$", "stat": CMMDs(level=0.5), "extra_stat_kwargs": {}},
+		{"level": 1.0, "label": "CMMD$_1$", "stat": CMMD1(), "extra_stat_kwargs": {}},
+		{"level": 1.5, "label": "CMMD$_{1.5}$", "stat": CMMDs(level=1.5), "extra_stat_kwargs": {}},
+		{
+			"level": 2.0,
+			"label": "CMMD$_2$",
+			"stat": CMMD2(),
+			"extra_stat_kwargs": {"estimator": cmmd2_estimator},
+		},
+	]
 	
 	algo = Test_Same_Marginal()
 
@@ -42,17 +51,13 @@ def run_power_experiment(
 
 	n = sample_size
 
-	results_cmmd0 = np.zeros(len(thetas))
-	results_cmmd1 = np.zeros(len(thetas))
-	results_cmmd2 = np.zeros(len(thetas))
+	results = {cfg["label"]: np.zeros(len(thetas)) for cfg in stat_configs}
 
 	for i, theta in enumerate(thetas):
 		# print current theta
 		print(f"Running power experiment for theta: {theta:.2f}")
 		
-		reject0 = 0
-		reject1 = 0
-		reject2 = 0
+		reject_counts = {cfg["label"]: 0 for cfg in stat_configs}
 
 
 		for trial in range(n_trials):
@@ -60,8 +65,8 @@ def run_power_experiment(
 			seed_z = int(rng.integers(1, 2**31))
 			seed_perm = int(rng.integers(1, 2**31))
 
-			X_P, Y = sample_joint_theta(n, theta, conditional_y, noise_std=noise_std, seed=seed_y)
-			X_Q, Z = sample_joint_theta(n, theta, conditional_z, noise_std=noise_std, seed=seed_z)
+			X_P, Y = sample_joint(n, theta, conditional_y, noise_std=noise_std, seed=seed_y)
+			X_Q, Z = sample_joint(n, theta, conditional_z, noise_std=noise_std, seed=seed_z)
 
 			X_P = X_P.reshape(-1, 1)
 			Y = Y.reshape(-1, 1)
@@ -83,56 +88,39 @@ def run_power_experiment(
 				"bandwidth": bandwidth,
 			}
 
-			_, p0 = algo.test(
-				X_P, Y, X_Q, Z,
-				cmmd0_stat,
-				gaussian_kernel,
-				algo_kwargs=algo_kwargs,
-				stat_kwargs=stat_kwargs,
-			)
-			_, p1 = algo.test(
-				X_P, Y, X_Q, Z,
-				cmmd1_stat,
-				gaussian_kernel,
-				algo_kwargs={**algo_kwargs, "random_state": seed_perm + 1},
-				stat_kwargs=stat_kwargs,
-			)
-			_, p2 = algo.test(
-				X_P, Y, X_Q, Z,
-				cmmd2_stat,
-				gaussian_kernel,
-				algo_kwargs={**algo_kwargs, "random_state": seed_perm + 2},
-				stat_kwargs={**stat_kwargs, "estimator": cmmd2_estimator},
-			)
+			trial_p_values = {}
+			for j, cfg in enumerate(stat_configs):
+				_, p_value = algo.test(
+					X_P,
+					Y,
+					X_Q,
+					Z,
+					cfg["stat"],
+					gaussian_kernel,
+					algo_kwargs={**algo_kwargs, "random_state": seed_perm + j},
+					stat_kwargs={**stat_kwargs, **cfg["extra_stat_kwargs"]},
+				)
 
-			reject0 += int(p0 < alpha)
-			reject1 += int(p1 < alpha)
-			reject2 += int(p2 < alpha)
+				reject_counts[cfg["label"]] += int(p_value < alpha)
+				trial_p_values[cfg["label"]] = p_value
 
 			# print every 50th trial for progress
 			if (trial + 1) % 50 == 0:
-				print(
-					f"Trial {trial+1:d}/{n_trials:d} for n={n:d}: "
-					f"CMMD0 p-value = {p0:.4f}, CMMD1 p-value = {p1:.4f}, CMMD2 p-value = {p2:.4f}"
+				pval_str = ", ".join(
+					f"{label} p-value = {trial_p_values[label]:.4f}" for label in trial_p_values
 				)
+				print(f"Trial {trial+1:d}/{n_trials:d} for n={n:d}: {pval_str}")
 
-		results_cmmd0[i] = reject0 / n_trials
-		results_cmmd1[i] = reject1 / n_trials
-		results_cmmd2[i] = reject2 / n_trials
+		for cfg in stat_configs:
+			results[cfg["label"]][i] = reject_counts[cfg["label"]] / n_trials
 
 		# print power for current theta
-		print(
-			f"Power for theta={theta:.2f}: "
-			f"CMMD0 = {results_cmmd0[i]:.3f}, "
-			f"CMMD1 = {results_cmmd1[i]:.3f}, "
-			f"CMMD2 = {results_cmmd2[i]:.3f}"
+		power_str = ", ".join(
+			f"{cfg['label']} = {results[cfg['label']][i]:.3f}" for cfg in stat_configs
 		)
+		print(f"Power for theta={theta:.2f}: {power_str}")
 
-	return {
-		"cmmd0": results_cmmd0,
-		"cmmd1": results_cmmd1,
-		"cmmd2": results_cmmd2,
-	}
+	return results
 
 
 def plot_power_vs_theta(
@@ -140,13 +128,13 @@ def plot_power_vs_theta(
 	results: dict[str, np.ndarray]
 ):
 	"""
-	Plot power/type I error vs theta for CMMD0, CMMD1, and CMMD2.
+	Plot power/type I error vs theta for CMMD levels.
 	"""
 	fig, ax = plt.subplots(figsize=(8, 6))
 
-	ax.plot(thetas, results["cmmd0"], marker="o", label="CMMD$_0$")
-	ax.plot(thetas, results["cmmd1"], marker="s", label="CMMD$_1$")
-	ax.plot(thetas, results["cmmd2"], marker="^", label="CMMD$_2$")
+	markers = ["o", "s", "^", "D", "v"]
+	for marker, label in zip(markers, results.keys()):
+		ax.plot(thetas, results[label], marker=marker, label=label)
 
 	ax.set_title("Power Curve", fontsize=24)
 	ax.set_xlabel("Covariate mean ($\\theta$)", fontsize=20)
@@ -162,14 +150,14 @@ def plot_power_vs_theta(
 
 
 if __name__ == "__main__":
-	thetas = [-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0]
+	thetas = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
 
 	results = run_power_experiment(
 		thetas = thetas,
 		sample_size=100,
 		n_trials=200,
 		alpha=0.05,
-		B=200,
+		B=100,
 		lam_p=0.1,
 		lam_q=0.1,
 		noise_std=0.5,
@@ -178,10 +166,10 @@ if __name__ == "__main__":
 
 	fig, _ = plot_power_vs_theta(thetas, results)
 
-	figs_dir = os.path.join(project_root, "figs/synthetic")
-	os.makedirs(figs_dir, exist_ok=True)
-	fig_path = os.path.join(figs_dir, f"power_vs_theta.pdf")
-	fig.savefig(fig_path, dpi=300, bbox_inches="tight")
-	print(f"Figure saved to: {fig_path}")
+	# figs_dir = os.path.join(project_root, "figs/lvls")
+	# os.makedirs(figs_dir, exist_ok=True)
+	# fig_path = os.path.join(figs_dir, f"power_vs_theta.pdf")
+	# fig.savefig(fig_path, dpi=300, bbox_inches="tight")
+	# print(f"Figure saved to: {fig_path}")
 
 	plt.show()
