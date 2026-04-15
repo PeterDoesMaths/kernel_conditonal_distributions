@@ -20,6 +20,7 @@ from src.lvls_models import sample_joint, conditional_y, conditional_z
 def run_power_experiment(
 	thetas: list[float],
 	sample_size: int,
+	setting: int = 2,
 	n_trials: int = 100,
 	alpha: float = 0.05,
 	B: int = 200,
@@ -43,30 +44,48 @@ def run_power_experiment(
 			"stat": CMMD2(),
 			"extra_stat_kwargs": {"estimator": cmmd2_estimator},
 		},
+		{"level": 2.5, "label": "CMMD$_{2.5}$", "stat": CMMDs(level=2.5), "extra_stat_kwargs": {}},
 	]
-	
+
+	if setting == 1:
+		setting_name = "Setting 1"
+	elif setting == 2:
+		setting_name = "Setting 2"
+	else:
+		raise ValueError(f"Unknown covariate setting: {setting}")
+
+	print(f"Running {setting_name}")
+
 	algo = Test_Same_Marginal()
-
 	rng = np.random.default_rng(seed)
-
 	n = sample_size
-
 	results = {cfg["label"]: np.zeros(len(thetas)) for cfg in stat_configs}
 
 	for i, theta in enumerate(thetas):
-		# print current theta
 		print(f"Running power experiment for theta: {theta:.2f}")
-		
 		reject_counts = {cfg["label"]: 0 for cfg in stat_configs}
-
 
 		for trial in range(n_trials):
 			seed_y = int(rng.integers(1, 2**31))
 			seed_z = int(rng.integers(1, 2**31))
 			seed_perm = int(rng.integers(1, 2**31))
 
-			X_P, Y = sample_joint(n, theta, conditional_y, noise_std=noise_std, seed=seed_y)
-			X_Q, Z = sample_joint(n, theta, conditional_z, noise_std=noise_std, seed=seed_z)
+			X_P, Y = sample_joint(
+				n,
+				theta,
+				conditional_y,
+				noise_std=noise_std,
+				setting=setting,
+				seed=seed_y,
+			)
+			X_Q, Z = sample_joint(
+				n,
+				theta,
+				conditional_z,
+				noise_std=noise_std,
+				setting=setting,
+				seed=seed_z,
+			)
 
 			X_P = X_P.reshape(-1, 1)
 			Y = Y.reshape(-1, 1)
@@ -125,19 +144,41 @@ def run_power_experiment(
 
 def plot_power_vs_theta(
 	thetas: list[float],
-	results: dict[str, np.ndarray]
+	results: dict[str, np.ndarray],
+	setting: int = 1,
 ):
 	"""
 	Plot power/type I error vs theta for CMMD levels.
 	"""
 	fig, ax = plt.subplots(figsize=(8, 6))
 
-	markers = ["o", "s", "^", "D", "v"]
+	markers = ["o", "s", "^", "D", "v", "8"]
+	label_colors = {
+		"CMMD$_0$": "tab:blue",
+		"CMMD$_1$": "tab:orange",
+		"CMMD$_2$": "tab:green",
+		"CMMD$_{0.5}$": "tab:brown",
+		"CMMD$_{1.5}$": "tab:pink",
+		"CMMD$_{2.5}$": "tab:olive",
+	}
 	for marker, label in zip(markers, results.keys()):
-		ax.plot(thetas, results[label], marker=marker, label=label)
+		ax.plot(
+			thetas,
+			results[label],
+			marker=marker,
+			label=label,
+			color=label_colors.get(label),
+		)
 
-	ax.set_title("Power Curve", fontsize=24)
-	ax.set_xlabel("Covariate mean ($\\theta$)", fontsize=20)
+	if setting == 1:
+		setting_name = "Setting 1"
+	elif setting == 2:
+		setting_name = "Setting 2"
+	else:
+		raise ValueError(f"Unknown covariate setting: {setting}")
+
+	ax.set_title(f"Power Curve - {setting_name}", fontsize=24)
+	ax.set_xlabel("Difference parameter ($\\theta$)", fontsize=20)
 	ax.set_ylabel("Power", fontsize=20)
 	ax.set_ylim(0.0, 1.1)
 	ax.legend(fontsize=16)
@@ -150,25 +191,27 @@ def plot_power_vs_theta(
 
 
 if __name__ == "__main__":
-	thetas = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+	thetas = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+	setting = 2
 
 	results = run_power_experiment(
-		thetas = thetas,
-		sample_size=100,
-		n_trials=200,
-		alpha=0.05,
-		B=100,
-		lam_p=0.1,
-		lam_q=0.1,
-		noise_std=0.5,
-		seed=42,
-	)
+			thetas=thetas,
+			sample_size=100,
+			setting=setting,
+			n_trials=200,
+			alpha=0.05,
+			B=200,
+			lam_p=0.1,
+			lam_q=0.1,
+			noise_std=0.5,
+			seed=42,
+		)
 
-	fig, _ = plot_power_vs_theta(thetas, results)
+	fig, _ = plot_power_vs_theta(thetas, results, setting=setting)
 
 	# figs_dir = os.path.join(project_root, "figs/lvls")
 	# os.makedirs(figs_dir, exist_ok=True)
-	# fig_path = os.path.join(figs_dir, f"power_vs_theta.pdf")
+	# fig_path = os.path.join(figs_dir, f"power_curve_setting_{setting}.pdf")
 	# fig.savefig(fig_path, dpi=300, bbox_inches="tight")
 	# print(f"Figure saved to: {fig_path}")
 
