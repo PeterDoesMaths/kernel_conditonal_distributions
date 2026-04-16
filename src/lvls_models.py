@@ -32,7 +32,7 @@ def sample_covariate(n: int, seed: int = None, setting: int = 1) -> np.ndarray:
     if setting == 1:
         return rng.uniform(0, 1, size=n)
     if setting == 2:
-        return rng.beta(2, 2, size=n)
+        return rng.beta(4, 4, size=n)
 
     raise ValueError(f"Unknown covariate setting: {setting}")
 
@@ -100,7 +100,7 @@ def conditional_z(
     if setting == 1:
         mean = np.sin(np.pi * (X - 0.25 * theta))
     elif setting == 2:
-        mean = (1 - 2 * theta) * np.sin(np.pi * X) + theta
+        mean = (1 - theta) * np.sin(np.pi * X) + 0.5 * theta
     else:
         raise ValueError(f"Unknown conditional Z setting: {setting}")
 

@@ -27,7 +27,7 @@ def run_power_experiment(
 	lam_p: float = 0.1,
 	lam_q: float = 0.1,
 	noise_std: float = 0.3,
-	cmmd2_estimator: str = "jmmd",
+	cmmd2_estimator: str = "cmmd",
 	seed: int = 42
 ) -> dict[str, np.ndarray]:
 	"""
@@ -209,10 +209,10 @@ if __name__ == "__main__":
 
 	fig, _ = plot_power_vs_theta(thetas, results, setting=setting)
 
-	# figs_dir = os.path.join(project_root, "figs/lvls")
-	# os.makedirs(figs_dir, exist_ok=True)
-	# fig_path = os.path.join(figs_dir, f"power_curve_setting_{setting}.pdf")
-	# fig.savefig(fig_path, dpi=300, bbox_inches="tight")
-	# print(f"Figure saved to: {fig_path}")
+	figs_dir = os.path.join(project_root, "figs/lvls")
+	os.makedirs(figs_dir, exist_ok=True)
+	fig_path = os.path.join(figs_dir, f"power_curve_setting_{setting}.pdf")
+	fig.savefig(fig_path, dpi=300, bbox_inches="tight")
+	print(f"Figure saved to: {fig_path}")
 
 	plt.show()
