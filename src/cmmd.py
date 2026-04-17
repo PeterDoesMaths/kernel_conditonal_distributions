@@ -462,7 +462,7 @@ class CMMD2(TestStatistic):
             # Term 3: Tr(L_ZZ K_X'X')
             term3 = np.trace(L_ZZ @ K_XqXq)
 
-            cmmd = (term1 + term2 + term3) / (n + m) ** 2
+            cmmd = (term1 / n ** 2) + (term2 / (n * m)) + (term3 / m ** 2)
             return float(cmmd)
 
         if estimator == "cmmd":
@@ -745,7 +745,7 @@ class CMMDs(TestStatistic):
         # Term 3: Tr(W_X' L_ZZ W_X' K_X'tilde K_tildeX')
         term3 = np.trace(W_Xq @ L_ZZ @ W_Xq @ P_Xq @ K @ P_Xq.T)
 
-        cmmd = (term1 + term2 + term3) / (n + m)
+        cmmd = (term1 + term2 + term3) / (n + m) ** s
 
         return float(cmmd)
 
