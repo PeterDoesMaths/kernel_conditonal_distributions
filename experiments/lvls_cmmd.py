@@ -1,5 +1,5 @@
 """
-Plot power against sample size for CMMD-based tests.
+Plot power against difference parameter theta for CMMD-based tests.
 """
 
 import numpy as np
@@ -192,7 +192,7 @@ def plot_power_vs_theta(
 
 if __name__ == "__main__":
 	thetas = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
-	setting = 2
+	setting = 1
 
 	results = run_power_experiment(
 			thetas=thetas,

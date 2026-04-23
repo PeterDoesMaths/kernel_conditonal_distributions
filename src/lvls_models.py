@@ -7,11 +7,11 @@ from typing import Tuple, Callable
 import inspect
 
 
-def sample_covariate(n: int, seed: int = None, setting: int = 1) -> np.ndarray:
+def sample_covariate(n: int, seed: int = None) -> np.ndarray:
     """
     Sample covariates from the base distribution.
 
-    Setting 1 uses X ~ U(0, 1); setting 2 uses X ~ Beta(2, 2).
+    X ~ Beta(4, 4).
     
     Parameters
     ----------
@@ -19,8 +19,6 @@ def sample_covariate(n: int, seed: int = None, setting: int = 1) -> np.ndarray:
         Number of samples.
     seed : int, optional
         Random seed for reproducibility.
-    setting : int, default=1
-        Covariate distribution setting.
     
     Returns
     -------
@@ -29,17 +27,12 @@ def sample_covariate(n: int, seed: int = None, setting: int = 1) -> np.ndarray:
     """
     rng = np.random.default_rng(seed)
 
-    if setting == 1:
-        return rng.uniform(0, 1, size=n)
-    if setting == 2:
-        return rng.beta(4, 4, size=n)
-
-    raise ValueError(f"Unknown covariate setting: {setting}")
+    return rng.beta(4, 4, size=n)
 
 
 def conditional_y(X: np.ndarray, theta: float, noise_std: float = 0.5, seed: int = None) -> np.ndarray:
     """
-    Sample from conditional distribution Y|X = exp(-0.5 X^2) sin(2X) + epsilon,
+    Sample from conditional distribution Y|X = sin(np.pi * X) + epsilon,
     where epsilon ~ N(0, noise_std^2).
     
     Parameters
@@ -73,7 +66,9 @@ def conditional_z(
     seed: int = None,
 ) -> np.ndarray:
     """
-    Sample from conditional distribution Z|X = X + epsilon,
+    Sample from conditional distribution 
+    Setting 1: Z|X = (1 - theta) * sin(np.pi * X) + theta * (3 * X - 0.5) + epsilon
+    Setting 2: Z|X = (1 - theta) * sin(np.pi * X) + 0.5 * theta + epsilon,
     where epsilon ~ N(0, noise_std^2).
     
     Parameters
@@ -98,7 +93,7 @@ def conditional_z(
     n = len(X)
 
     if setting == 1:
-        mean = np.sin(np.pi * (X - 0.25 * theta))
+        mean = (1 - theta) * np.sin(np.pi * X) + theta * (3 * X - 0.5)
     elif setting == 2:
         mean = (1 - theta) * np.sin(np.pi * X) + 0.5 * theta
     else:
@@ -145,7 +140,7 @@ def sample_joint(
     seed_x = rng.integers(0, 2**31)
     seed_y = rng.integers(0, 2**31)
     
-    X = sample_covariate(n, seed=seed_x, setting=setting)
+    X = sample_covariate(n, seed=seed_x)
     conditional_kwargs = {
         "noise_std": noise_std,
         "seed": seed_y,
