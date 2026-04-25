@@ -1,5 +1,6 @@
 """
-Conditional Maximum Mean Discrepancy (CMMD) test statistics and algorithms.
+CMMD test statistics and hypothesis-testing algorithms.
+Implements CMMD levels, doubly robust variants, and bootstrap/permutation tests.
 """
 
 from abc import ABC, abstractmethod
@@ -218,7 +219,7 @@ class CMMD0_dr(TestStatistic):
         mu_Y = cme_y(X)
         mu_Z = cme_z(X)
 
-        # Compute feat operator
+        # Combine observed outcomes into a single feature vector
         Phi_W = np.asarray(YZ_combined).reshape(-1)
 
         # Pseudo-outcome operator
@@ -279,11 +280,11 @@ class CMMD1_dr(TestStatistic):
         E = np.clip(np.asarray(E).reshape(-1), 1e-6, 1 - 1e-6)
         E_tilde = (T - E) / (E * (1 - E))
 
-        # # CME models for Y and Z
+        # CME models for Y and Z
         mu_Y = cme_y(X)
         mu_Z = cme_z(X)
 
-        # Compute feat operator
+        # Combine observed outcomes into a single feature vector
         Phi_W = np.asarray(YZ_combined).reshape(-1)
 
         # Pseudo-outcome operator
@@ -348,7 +349,7 @@ class CMMD2_dr(TestStatistic):
         mu_Y = cme_y(X)
         mu_Z = cme_z(X)
 
-        # Compute feat operator
+        # Combine observed outcomes into a single feature vector
         Phi_W = np.asarray(YZ_combined).reshape(-1)
 
         # Pseudo-outcome operator
@@ -524,7 +525,7 @@ class CMMD0_primal(TestStatistic):
         X_P_flat = np.asarray(X_P).flatten()
         X_Q_flat = np.asarray(X_Q).flatten()
 
-        # Compute one hot encoding of X_P and X_Q
+        # Build one-hot feature maps for the pooled categorical support
         unique_X = np.unique(np.concatenate([np.unique(X_P_flat), np.unique(X_Q_flat)]))
         Phi_Xp = np.zeros((unique_X.size, X_P_flat.shape[0]))
         for i, x in enumerate(unique_X):
@@ -587,7 +588,7 @@ class CMMD1_primal(TestStatistic):
         X_P_flat = np.asarray(X_P).flatten()
         X_Q_flat = np.asarray(X_Q).flatten()
 
-        # Compute one hot encoding of X_P and X_Q
+        # Build one-hot feature maps for the pooled categorical support
         unique_X = np.unique(np.concatenate([np.unique(X_P_flat), np.unique(X_Q_flat)]))
         Phi_Xp = np.zeros((unique_X.size, X_P_flat.shape[0]))
         for i, x in enumerate(unique_X):
@@ -653,7 +654,7 @@ class CMMD2_primal(TestStatistic):
         X_P_flat = np.asarray(X_P).flatten()
         X_Q_flat = np.asarray(X_Q).flatten()
 
-        # Compute one hot encoding of X_P and X_Q
+        # Build one-hot feature maps for the pooled categorical support
         unique_X = np.unique(np.concatenate([np.unique(X_P_flat), np.unique(X_Q_flat)]))
         Phi_Xp = np.zeros((unique_X.size, X_P_flat.shape[0]))
         for i, x in enumerate(unique_X):
@@ -695,7 +696,7 @@ class CMMDs(TestStatistic):
     Uses pooled covariates \tilde{X} = (X, X')
     """
 
-    # initialize with level parameter for smoothing matrix
+    # Level controls the power used in the pooled kernel smoothing matrix.
     def __init__(self, level: float = 0.5):
         self.level = float(level)
     
@@ -1003,7 +1004,7 @@ class Test_Diff_Marginal(Algorithm):
                     **stat_kwargs,
                 )
             else:
-                # If one group is empty, set stat to 0 (or inf for safety)
+                # If one group is empty after resampling, assign a neutral value.
                 stats_boot[b] = 0.0
 
         p_value = (1.0 + np.sum(stats_boot > stat)) / (1.0 + B)

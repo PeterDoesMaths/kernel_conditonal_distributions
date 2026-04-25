@@ -1,5 +1,6 @@
 """
-Plot power against sample size for CMMD-based tests.
+Estimate Type I error or power for CMMD tests over sample size.
+Handles both same-marginal and shifted-marginal synthetic settings.
 """
 
 import numpy as np
@@ -50,7 +51,7 @@ def run_power_experiment(
 	results_cmmd2 = np.zeros(len(sample_sizes))
 
 	for i, n in enumerate(sample_sizes):
-		# print current sample size
+		# Run all Monte Carlo trials at the current sample size.
 		print(f"Running power experiment for sample size: {n}")
 		
 		reject0 = 0
@@ -96,10 +97,11 @@ def run_power_experiment(
 			stat_kwargs = {
 				"bandwidth": bandwidth,
 			}
-			# Add propensity function if using different marginals
+			# Propensity is required when marginals differ.
 			if setting == "diff_marginal":
 				algo_kwargs["propensity_fn"] = propensity
 
+			# Compute p-values for CMMD0/1/2 on the current split.
 			_, p0 = algo.test(
 				X_P, Y, X_Q, Z,
 				cmmd0_stat,
@@ -122,11 +124,12 @@ def run_power_experiment(
 				stat_kwargs={**stat_kwargs, "estimator": cmmd2_estimator},
 			)
 
+			# Update rejection counts at level alpha.
 			reject0 += int(p0 < alpha)
 			reject1 += int(p1 < alpha)
 			reject2 += int(p2 < alpha)
 
-			# print every 50th trial for progress
+			# Log progress every 50 trials.
 			if (trial + 1) % 50 == 0:
 				print(
 					f"Trial {trial+1:d}/{n_trials:d} for n={n:d}: "
@@ -157,7 +160,7 @@ def plot_power_vs_sample_size(
 	"""
 	fig, ax = plt.subplots(figsize=(8, 6))
 	
-	# if error is type1, plot significance level line at alpha=0.05
+	# Add significance-level reference for Type I error curves.
 	if error == "type1":
 		ax.axhline(0.05, color="black", linestyle="--")
 
@@ -188,6 +191,14 @@ def plot_power_vs_sample_size(
 if __name__ == "__main__":
 	sample_sizes = [10, 50, 100, 150, 200, 250]
 	n_trials = 200
+
+	# error modes:
+	# - type1: null case, Q uses conditional_y so P_{Y|X} = Q_{Z|X}.
+	# - type2: alternative case, Q uses conditional_z so P_{Y|X} != Q_{Z|X}.
+	# setting modes (from src.models):
+	# - same_marginal: X_P, X_Q ~ N(0,1).
+	# - diff_marginal: X_P ~ N(-0.5,1), X_Q ~ N(0.5,1).
+	
 	error = "type1"
 	# error = "type2"
 	# setting = "same_marginal"

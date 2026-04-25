@@ -1,5 +1,6 @@
 """
-Compare standard and doubly robust CMMD_1 test statistics from conditional distributions.
+Compare standard and doubly robust CMMD_1 estimators across repeated trials.
+Plots the empirical distribution of both estimators against a Monte Carlo reference.
 """
 
 import numpy as np
@@ -62,7 +63,7 @@ def compute_cmmd1_estimates(
 		linear_kernel
 	)
 
-	# Build pseudo-outcomes on pooled training data, then tune KRR alpha for DR lambda
+    # Build pooled pseudo-outcomes, then tune KRR regularization for DR lambda.
 	X_train = np.concatenate([X_P, X_Q], axis=0)
 	YZ_train = np.concatenate([Y.flatten(), Z.flatten()])
 	T_train = np.concatenate([
@@ -117,12 +118,6 @@ def run_dr_cmmd_experiment(
         Number of independent trials.
     n_samples : int, default=100
         Number of samples per trial.
-    lam_p : float, default=0.01
-        Regularization parameter for distribution P.
-    lam_q : float, default=0.01
-        Regularization parameter for distribution Q.
-    bandwidth : float, default=0.1
-        Bandwidth parameter for Gaussian kernel.
     
     Returns
     -------
@@ -163,14 +158,14 @@ def run_dr_cmmd_experiment(
 
 def true_cmmd(n_samples: int = 1000) -> float:
     """
-    Compute the true CMMD1^2 between P and Q using numerical integration.
+    Approximate CMMD1^2 between P and Q by Monte Carlo averaging.
     
     Parameters
     ----------
     n_samples : int, default=1000
         Number of samples to use for numerical approximation.
     """
-    # Sample covariate from combined distribution for numerical approximation
+    # Draw covariates from both groups for Monte Carlo approximation.
     X_P, _ = sample_joint(n_samples, sample_covariate_p, conditional_y, seed=1)
     X_Q, _ = sample_joint(n_samples, sample_covariate_q, conditional_z, seed=2) 
 
@@ -198,7 +193,7 @@ def plot_test_statistics(
     """
     fig, ax = plt.subplots(figsize=(8, 6))
 
-    # Add vertical line for true CMMD1^2
+    # Add a vertical reference line for the approximated CMMD1^2.
     ax.axvline(cmmd1_true, color='black', linestyle='--', linewidth=2, label='True Value')
     
     # Create overlaid histograms
@@ -246,12 +241,12 @@ if __name__ == '__main__':
     # Plot results
     fig, ax = plot_test_statistics(cmmd1_standard_stats, cmmd1_dr_stats, cmmd1_true)
     
-    # Save figure (use absolute path)
-    # figs_dir = os.path.join(script_dir, '..', 'figs/dr')
-    # os.makedirs(figs_dir, exist_ok=True)
-    # fig_path = os.path.join(figs_dir, f'cmmd1_test_statistics.pdf')
-    # fig.savefig(fig_path, dpi=300, bbox_inches='tight')
-    # print(f"\nFigure saved to: {fig_path}")
+    # Save figure
+    figs_dir = os.path.join(script_dir, '..', 'figs/dr')
+    os.makedirs(figs_dir, exist_ok=True)
+    fig_path = os.path.join(figs_dir, f'cmmd1_test_statistics.pdf')
+    fig.savefig(fig_path, dpi=300, bbox_inches='tight')
+    print(f"\nFigure saved to: {fig_path}")
     
     # Display plot
     plt.show()

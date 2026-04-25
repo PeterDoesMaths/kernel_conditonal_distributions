@@ -1,5 +1,6 @@
 """
-Plot squared error of CMMD1 estimators for standard vs doubly robust methods.
+Evaluate squared-error scaling of standard vs doubly robust CMMD1 estimators.
+Runs repeated trials over sample sizes and reports mean error with uncertainty bars.
 """
 
 import numpy as np
@@ -61,7 +62,7 @@ def fit_krr_predict(
 
 def true_cmmd(n_samples: int = 2000) -> float:
 	"""
-	Compute the true CMMD1^2 between P and Q using numerical integration.
+	Approximate CMMD1^2 between P and Q by Monte Carlo averaging.
 	"""
 	X_P, _ = sample_joint(n_samples, sample_covariate_p, conditional_y, seed=1)
 	X_Q, _ = sample_joint(n_samples, sample_covariate_q, conditional_z, seed=2)
@@ -113,7 +114,7 @@ def compute_cmmd1_estimates(
 		linear_kernel
 	)
 
-	# Build pseudo-outcomes on pooled training data, then tune KRR alpha for DR lambda
+	# Build pooled pseudo-outcomes, then tune KRR regularization for DR lambda.
 	X_train = np.concatenate([X_P, X_Q], axis=0)
 	YZ_train = np.concatenate([Y.flatten(), Z.flatten()])
 	T_train = np.concatenate([

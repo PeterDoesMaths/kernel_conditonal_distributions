@@ -1,5 +1,6 @@
 """
-Plot power against sample size for CMMD-based tests.
+Estimate power curves for CMMD tests over alternative strength parameters.
+Uses same-marginal synthetic data with varying covariate mean shift.
 """
 
 import numpy as np
@@ -68,7 +69,7 @@ def run_power_experiment(
 			X_Q = X_Q.reshape(-1, 1)
 			Z = Z.reshape(-1, 1)
 
-			# get bandwidth for current dimension via median heuristic
+			# Choose bandwidth for current theta using median heuristic
 			bandwidth = median_heuristic(X_P)
 
 			# Prepare kwargs for test method

@@ -1,11 +1,6 @@
 """
-Plot power against sample size for CMMD-based tests using MNIST data.
-
-Tests conditional distribution differences under covariate shift (different marginals).
-- Covariate X: digit class (0-9)
-- Conditional outcome Y|X: images of digit X
-- Null: Z|X = Y|X (same conditional distribution)
-- Alternative: Z|X biased towards brightest images
+Run CMMD tests on MNIST under covariate shift across sample sizes.
+Evaluates Type I error and power when Q_{Z|X} is brightness-biased under the alternative.
 """
 
 import numpy as np
@@ -31,7 +26,7 @@ def load_mnist_data() -> pd.DataFrame:
     Returns
     -------
     df : pd.DataFrame
-        Columns: X (digit label), Y_0 to Y_783 (normalized pixel values)
+        Columns: X (digit label) and Y_* PCA components.
     """
     data_path = Path(project_root) / "data" / "clean_mnist" / "mnist_test.csv"
     df = pd.read_csv(data_path)
@@ -177,9 +172,9 @@ def run_mnist_power_experiment(
     
     rng = np.random.default_rng(seed)
     
-    # Marginals: P_X uniform over all digits, Q_X uniform but shifted
+    # P uses a uniform digit marginal and Q uses a shifted marginal over digits.
     digits_P = np.arange(10)  # All digits 0-9
-    digits_Q = np.arange(10)  # Same for now (can modify for stronger shift)
+    digits_Q = np.arange(10)
     Px_probs = np.ones(len(digits_P)) / len(digits_P)
     Qx_probs = np.array([0.145-0.01*x for x in digits_Q])  # Slightly shift towards lower digits
     
@@ -239,12 +234,8 @@ def run_mnist_power_experiment(
                 "random_state": seed_perm,
             }
             
-            # Propensity function (uniform marginals assumed)
+            # Analytic propensity induced by the chosen P and Q digit marginals.
             def propensity_fn(X):
-                # For uniform marginals, propensity ≈ 0.5
-                # X_flat = np.asarray(X).flatten()
-                # return np.full(X_flat.shape[0], 0.5, dtype=float)
-                # e(x) = 1 / (2.45 - 0.1 x)
                 e = 1 / (2.45 - 0.1 * X.flatten())
                 return e
             
@@ -346,6 +337,11 @@ if __name__ == "__main__":
     # Configuration
     sample_sizes = [200, 400, 600, 800, 1000, 1200]
     n_trials = 200
+
+    # error modes:
+    # - type1: Q samples images uniformly within each digit class (null).
+    # - type2: Q samples brighter images within each digit class (alternative).
+
     # error = "type1"
     error = "type2"
     

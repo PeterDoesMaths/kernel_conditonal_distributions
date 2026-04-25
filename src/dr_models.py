@@ -1,5 +1,6 @@
 """
-Data generating processes for conditional distribution experiments.
+Synthetic data-generating processes for doubly robust CMMD experiments.
+Defines shifted marginals, conditional responses, and analytic propensity scores.
 """
 
 import numpy as np
@@ -105,7 +106,7 @@ def sample_joint(
     marginal_fn : callable
         Function (n, seed) -> X that generates covariate samples.
     conditional_fn : callable
-        Function (X, noise_std, seed) -> Y that generates conditional samples.
+        Function (X, seed) -> Y that generates conditional samples.
     seed : int, optional
         Random seed for reproducibility.
     
@@ -127,7 +128,7 @@ def sample_joint(
 
 def propensity(X: np.ndarray) -> np.ndarray:
     """
-    Propensity score function.
+    Propensity score function e(x) = P(T=1 | X=x).
 
     e(x) = 1 / (1 + (1/π) * x^(-0.5) * (1-x)^(-0.5)) for Beta(0.5, 0.5) vs Uniform(0, 1)
     
@@ -150,8 +151,8 @@ def propensity(X: np.ndarray) -> np.ndarray:
 if __name__ == "__main__":
     # Test sampling functions
     n_samples = 5
-    X_p, Y = sample_joint(n_samples, sample_covariate_p, conditional_y, noise_std=0.5, seed=42)
-    X_q, Z = sample_joint(n_samples, sample_covariate_q, conditional_z, noise_std=0.5, seed=43)
+    X_p, Y = sample_joint(n_samples, sample_covariate_p, conditional_y, seed=42)
+    X_q, Z = sample_joint(n_samples, sample_covariate_q, conditional_z, seed=43)
     
     print("Sample from P:")
     for x, y in zip(X_p, Y):

@@ -1,5 +1,6 @@
 """
-Data generating processes for conditional distribution experiments.
+Synthetic data-generating processes for baseline CMMD experiments.
+Includes same-marginal and shifted-marginal sampling with analytic propensity.
 """
 
 import numpy as np
@@ -129,6 +130,8 @@ def sample_joint(
     ----------
     n : int
         Number of samples.
+    marginal_fn : callable
+        Function (n, seed) -> X that generates covariate samples.
     conditional_fn : callable
         Function (X, noise_std, seed) -> Y that generates conditional samples.
     noise_std : float, default=0.5
@@ -192,7 +195,7 @@ def sample_joint_theta(
 
 def propensity(X: np.ndarray, mu_p: float = -0.5, mu_q: float = 0.5, sigma: float = 1.0) -> np.ndarray:
     """
-    propensity score function.
+    Propensity score function.
     
     Parameters
     ----------

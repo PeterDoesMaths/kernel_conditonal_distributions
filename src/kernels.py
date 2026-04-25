@@ -1,5 +1,6 @@
 """
-Kernel functions for CMMD computation.
+Kernel functions used by CMMD estimators and hypothesis tests.
+Includes continuous, discrete, and utility bandwidth-selection kernels.
 """
 
 import numpy as np

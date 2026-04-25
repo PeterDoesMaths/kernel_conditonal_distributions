@@ -1,5 +1,6 @@
 """
-Plot test power against dimension for CMMD-based tests.
+Measure how CMMD test power changes with covariate dimension.
+Constructs multivariate synthetic data with controlled noise growth by coordinate.
 """
 
 import numpy as np
@@ -85,7 +86,7 @@ def run_dimension_power_experiment(
 		reject1 = 0
 		reject2 = 0
 
-		# get bandwidth for current dimension via median heuristic
+		# Calibrate bandwidth for the current dimension
 		X_cols = []
 		for _ in range(d):
 			X_noise = rng.normal(theta, 0.75, size=sample_size)

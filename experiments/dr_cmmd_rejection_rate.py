@@ -1,5 +1,6 @@
 """
-Plot power against sample size for CMMD-based tests.
+Estimate rejection rates for standard and doubly robust CMMD tests.
+Reports Type I error or power as a function of sample size under covariate shift.
 """
 
 import numpy as np
@@ -13,7 +14,6 @@ project_root = os.path.dirname(script_dir)
 sys.path.insert(0, project_root)
 
 from src.cmmd import CMMD0, CMMD1, CMMD2, CMMD0_dr, CMMD1_dr, CMMD2_dr, Test_Diff_Marginal
-# from src.kernels import gaussian_kernel, kronecker_delta_kernel
 from src.kernels import polynomial_kernel, linear_kernel
 from src.dr_models import sample_joint, sample_covariate_p, sample_covariate_q, conditional_y, conditional_z, propensity
 from sklearn.kernel_ridge import KernelRidge
@@ -50,7 +50,7 @@ def run_power_experiment(
 	results_cmmd2_dr = np.zeros(len(sample_sizes))
 
 	for i, n in enumerate(sample_sizes):
-		# print current sample size
+		# Run all Monte Carlo trials at the current sample size.
 		print(f"Running power experiment for sample size: {n}")
 		
 		reject0 = 0
@@ -93,7 +93,7 @@ def run_power_experiment(
 			lam_p = alpha_p / X_P.shape[0]
 			lam_q = alpha_q / X_Q.shape[0]
 
-			# Build pseudo-outcomes on pooled training data, then tune KRR alpha for DR lambda
+			# Build pooled pseudo-outcomes, then tune KRR regularization for DR lambda.
 			X_train = np.concatenate([X_P, X_Q], axis=0)
 			YZ_train = np.concatenate([Y.flatten(), Z.flatten()])
 			T_train = np.concatenate([
@@ -138,13 +138,8 @@ def run_power_experiment(
 				"lam_q": lam_dr,
 				"propensity_fn": propensity,
 			}
-			# stat_kwargs = {
-			# 	"bandwidth": bandwidth,
-			# }
+			
 			stat_kwargs = {}
-			# Add propensity function if using different marginals
-			# algo_kwargs["propensity_fn"] = propensity
-
 			_, p0 = algo.test(
 				X_P, Y, X_Q, Z,
 				cmmd0_stat,
@@ -154,6 +149,7 @@ def run_power_experiment(
 				stat_kwargs=stat_kwargs,
 			)
 			
+			# Compute p-values for standard and DR tests
 			_, p1 = algo.test(
 				X_P, Y, X_Q, Z,
 				cmmd1_stat,
@@ -194,6 +190,8 @@ def run_power_experiment(
 				algo_kwargs={**algo_kwargs_dr, "random_state": seed_perm + 2},
 				stat_kwargs={**stat_kwargs, "propensity": propensity, "cme_y": cme_y, "cme_z": cme_z},
 			)
+
+			# Update rejection counts for standard and DR tests
 			reject0 += int(p0 < alpha)
 			reject1 += int(p1 < alpha)
 			reject2 += int(p2 < alpha)
@@ -201,7 +199,7 @@ def run_power_experiment(
 			reject1_dr += int(p1_dr < alpha)
 			reject2_dr += int(p2_dr < alpha)
 
-			# print every 50th trial for progress
+			# Log progress every 50 trials.
 			if (trial + 1) % 50 == 0:
 				print(
 					f"Trial {trial+1:d}/{n_trials:d} for n={n:d}: "
@@ -216,7 +214,7 @@ def run_power_experiment(
 		results_cmmd1_dr[i] = reject1_dr / n_trials
 		results_cmmd2_dr[i] = reject2_dr / n_trials
 
-		# print power for current theta
+		# Print rejection rates for the current sample size.
 		print(
 			f"rejection rate for n={n:.2f}: "
 			f"CMMD0 = {results_cmmd0[i]:.3f}, "
@@ -247,7 +245,7 @@ def plot_power_vs_sample_size(
 	"""
 	fig, ax = plt.subplots(figsize=(8, 6))
 	
-	# if error is type1, plot significance level line at alpha=0.05
+	# Add significance-level reference for Type I error curves.
 	if error == "type1":
 		ax.axhline(0.05, color="black", linestyle="--")
 

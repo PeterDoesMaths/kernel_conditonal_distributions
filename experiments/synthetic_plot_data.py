@@ -1,5 +1,6 @@
 """
-Visualize the conditional distributions from the synthetic data model.
+Visualize synthetic samples from P and Q conditional distributions.
+Supports both same-marginal and shifted-marginal settings.
 """
 
 import numpy as np
@@ -17,7 +18,7 @@ def plot_conditional_distributions(setting: str = 'diff_marginal', n_samples: in
     """
     Plot samples from both conditional distributions P_{Y|X} and P_{Z|X}.
     """
-    # Sample from both distributions
+    # Sample P and Q according to the selected marginal setting.
     if setting == 'same_marginal':
         X_P, Y = sample_joint(n_samples, sample_covariate, conditional_y,  noise_std=noise_std, seed=seed)
         X_Q, Z = sample_joint(n_samples, sample_covariate, conditional_z, noise_std=noise_std, seed=seed+1)
@@ -52,6 +53,10 @@ def plot_conditional_distributions(setting: str = 'diff_marginal', n_samples: in
 
 
 if __name__ == '__main__':
+    # setting options (from src.models):
+    # - same_marginal: X_P, X_Q ~ N(0,1), so only conditionals differ.
+    # - diff_marginal: X_P ~ N(-0.5,1), X_Q ~ N(0.5,1), so marginals also differ.
+
     # setting = 'same_marginal'
     setting = 'diff_marginal'
     plot_conditional_distributions(setting=setting)

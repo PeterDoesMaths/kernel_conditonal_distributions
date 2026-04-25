@@ -1,5 +1,6 @@
 """
-Generate and plot CMMD test statistics from conditional distributions.
+Generate empirical distributions of CMMD test statistics under synthetic models.
+Compares CMMD_0, CMMD_1, and CMMD_2 across configurable settings.
 """
 
 import numpy as np
@@ -66,10 +67,6 @@ def run_cmmd_experiment(
     cmmd1_stats = np.zeros(n_trials)
     cmmd2_stats = np.zeros(n_trials)
     
-    # Estimate bandwidth using median heuristic on first data sample
-    # X_pilot, _ = sample_joint(n_samples, conditional_y, noise_std=noise_std, seed=42)
-    # bandwidth = median_heuristic(X_pilot)
-    
     print(f"Running {n_trials} trials with:")
     print(f"  - n_samples per trial: {n_samples}")
     print(f"  - lam_p: {lam_p}, lam_q: {lam_q}")
@@ -78,8 +75,6 @@ def run_cmmd_experiment(
     
     # Run trials
     for trial in range(n_trials):
-        # Generate data from two conditional distributions
-        # Select marginal distributions based on setting
         if setting == 'same_marginal':
             marginal_p = sample_covariate
             marginal_q = sample_covariate
@@ -108,7 +103,7 @@ def run_cmmd_experiment(
         X_Q = X_Q.reshape(-1, 1)
         Z = Z.reshape(-1, 1)
         
-        # Compute CMMD0, CMMD1, and CMMD2 test statistics
+        # Compute CMMD0/1/2 test statistics on the current sample.
         stat0 = cmmd0_stat.compute(
             X_P, Y, X_Q, Z,
             lam_p, lam_q,
@@ -133,7 +128,7 @@ def run_cmmd_experiment(
         cmmd1_stats[trial] = stat1
         cmmd2_stats[trial] = stat2
 
-        # print every 100th trial for progress
+        # Log progress every 100 trials.
         if (trial + 1) % 100 == 0:
             print(
                 f"Trial {trial+1:d}: CMMD0 = {stat0:.6f}, "
@@ -210,7 +205,11 @@ def plot_test_statistics(
 
 
 if __name__ == '__main__':
-    # Setting
+    # Setting options:
+    # - same_marginal: X_P, X_Q ~ N(0,1).
+    # - diff_marginal: X_P ~ N(-0.5,1), X_Q ~ N(0.5,1).
+    # - same_marginal_theta: X_P, X_Q ~ N(theta, 0.75^2).
+
     setting="same_marginal_theta"
     # setting="same_marginal"
     # setting="diff_marginal"

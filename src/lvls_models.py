@@ -1,5 +1,6 @@
 """
-Data generating processes for conditional distribution experiments.
+Synthetic data-generating processes for CMMD level-comparison experiments.
+Provides settings that vary conditional alternatives through a scalar parameter.
 """
 
 import numpy as np
@@ -40,7 +41,7 @@ def conditional_y(X: np.ndarray, theta: float, noise_std: float = 0.5, seed: int
     X : np.ndarray, shape (n,)
         Covariate values.
     theta : float
-        Parameter controlling the mean of the conditional distribution.
+        Unused placeholder kept for API compatibility with conditional_z.
     noise_std : float, default=0.5
         Standard deviation of the noise term.
     seed : int, optional
@@ -125,7 +126,7 @@ def sample_joint(
     noise_std : float, default=0.5
         Standard deviation of the noise term.
     setting : int, default=1
-        Covariate distribution setting.
+        Conditional setting forwarded to conditional_fn when supported.
     seed : int, optional
         Random seed for reproducibility.
     

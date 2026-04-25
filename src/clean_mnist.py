@@ -1,7 +1,6 @@
 """
-Clean MNIST test set: Convert from idx binary format to CSV.
-- X: label (digit 0-9)
-- Y: 784 pixel values (28x28 flattened)
+Preprocess the MNIST test split from IDX files into a CSV dataset.
+The output stores digit labels and a 100-dimensional PCA representation per image.
 """
 
 import struct
@@ -17,8 +16,8 @@ def load_idx_images(filepath: str) -> np.ndarray:
     
     Returns
     -------
-    images : np.ndarray, shape (n_samples, 784)
-        Flattened image data (28x28 -> 784D).
+    images : np.ndarray, shape (n_samples, n_rows * n_cols)
+        Flattened image data from the IDX file.
     """
     with open(filepath, 'rb') as f:
         magic = struct.unpack('>I', f.read(4))[0]

@@ -1,8 +1,6 @@
 """
-Experiment: Conditional Mean Embedding (CME) using Kernel Ridge Regression.
-
-This script samples from the models defined in dr_models.py and computes
-the conditional mean embeddings for Y and Z using kernel ridge regression.
+Estimate and visualize conditional mean embeddings with kernel ridge regression.
+Compares standard and doubly robust estimators of the CME difference.
 """
 
 import numpy as np
@@ -69,13 +67,13 @@ def cme_model(
 
 def plot_cme_data(x_eval: np.ndarray, cme_Y: np.ndarray, cme_Z: np.ndarray, X_p: np.ndarray, Y: np.ndarray, X_q: np.ndarray, Z: np.ndarray):
     """
-    Plot the CME estimates for Y and Z, as well as the training data. Have different plots for P and Q samples.
+    Plot fitted CMEs and training samples for groups P and Q.
     """
 
     true_y = np.cos(4 * np.pi * x_eval) + 0.5 * x_eval**2 
     true_z = np.cos(4 * np.pi * x_eval)
 
-    # plot 1, CME for Y with P samples
+    # Plot CME for Y together with P samples.
     fig_y, ax_y = plt.subplots(figsize=(8, 6))
     ax_y.plot(x_eval, cme_Y, label=r"$\hat \mu_{Y|x}$", linewidth=3, color='blue')
     ax_y.plot(x_eval, true_y, label=r"$\mu_{Y|x}$", linewidth=3, color='black', linestyle='--')
@@ -89,14 +87,14 @@ def plot_cme_data(x_eval: np.ndarray, cme_Y: np.ndarray, cme_Z: np.ndarray, X_p:
     plt.tight_layout()
     plt.show()
 
-    # save the first plot
+    # Save the first plot.
     output_dir = Path(__file__).parent.parent / "figs" / "dr"
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "cme_y.pdf"
     fig_y.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"\nFigure saved to: {output_path}")
 
-    # plot 2, CME for Z with Q samples
+    # Plot CME for Z together with Q samples.
     fig_z, ax_z = plt.subplots(figsize=(8, 6))
     ax_z.plot(x_eval, cme_Z, label=r"$\hat \mu_{Z|x}$", linewidth=3, color='red')
     ax_z.plot(x_eval, true_z, label=r"$\mu_{Z|x}$", linewidth=3, color='black', linestyle='--')
@@ -110,7 +108,7 @@ def plot_cme_data(x_eval: np.ndarray, cme_Y: np.ndarray, cme_Z: np.ndarray, X_p:
     plt.tight_layout()
     plt.show()
 
-    # save the second plot
+    # Save the second plot.
     output_path = output_dir / "cme_z.pdf"
     fig_z.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"\nFigure saved to: {output_path}")
@@ -133,7 +131,7 @@ def plot_pseudo_outcome(X_test: np.ndarray, pseudo_outcome: np.ndarray, peudo_cm
     plt.tight_layout()
     plt.show()
 
-    # save the pseudo-outcome plot
+    # Save the pseudo-outcome plot.
     output_dir = Path(__file__).parent.parent / "figs" / "dr"
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "pseudo_outcome.pdf"
@@ -203,7 +201,7 @@ def main():
     cme_Z = model_Z.predict(x_eval_2d)
     standard_cme_diff = cme_Y - cme_Z
 
-    # merge data for DR estimation
+    # Merge samples from both groups for DR estimation.
     X_test = np.concatenate([X_p, X_q])
     X_test_2d = X_test.reshape(-1, 1)
     YZ_test = np.concatenate([Y, Z])
@@ -218,7 +216,7 @@ def main():
     cme_Y_train = model_Y.predict(X_test_2d)
     cme_Z_train = model_Z.predict(X_test_2d)
 
-    # RKHS difference psuedo-outcome for doubly robust estimation
+    # Construct pseudo-outcomes for the DR estimator.
     psuedo_outcome = (T - E) / (E * (1 - E)) * (YZ_test - (1 - E) * cme_Y_train - E * cme_Z_train)
 
     plot_cme_data(x_eval, cme_Y, cme_Z, X_p, Y, X_q, Z)

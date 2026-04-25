@@ -1,5 +1,6 @@
 """
-Plot power against difference parameter theta for CMMD-based tests.
+Compare power across CMMD levels over a grid of alternative strengths.
+Includes CMMD_0, CMMD_1, CMMD_2, and intermediate CMMD_s levels.
 """
 
 import numpy as np
@@ -92,7 +93,7 @@ def run_power_experiment(
 			X_Q = X_Q.reshape(-1, 1)
 			Z = Z.reshape(-1, 1)
 
-			# get bandwidth for current dimension via median heuristic
+			# Choose bandwidth from the current trial covariates.
 			bandwidth = median_heuristic(X_P)
 
 			# Prepare kwargs for test method
@@ -108,6 +109,7 @@ def run_power_experiment(
 			}
 
 			trial_p_values = {}
+			# Compute p-values for all CMMD levels in this trial.
 			for j, cfg in enumerate(stat_configs):
 				_, p_value = algo.test(
 					X_P,
@@ -120,10 +122,11 @@ def run_power_experiment(
 					stat_kwargs={**stat_kwargs, **cfg["extra_stat_kwargs"]},
 				)
 
+				# Update rejection counts at level alpha.
 				reject_counts[cfg["label"]] += int(p_value < alpha)
 				trial_p_values[cfg["label"]] = p_value
 
-			# print every 50th trial for progress
+			# Log progress every 50 trials.
 			if (trial + 1) % 50 == 0:
 				pval_str = ", ".join(
 					f"{label} p-value = {trial_p_values[label]:.4f}" for label in trial_p_values
@@ -191,7 +194,12 @@ def plot_power_vs_theta(
 
 
 if __name__ == "__main__":
+	
 	thetas = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+
+	# setting values (from src.lvls_models.conditional_z):
+	# - setting=1: Z mean interpolates toward 3X - 0.5 as theta increases.
+	# - setting=2: Z mean interpolates toward a constant 0.5*theta.
 	setting = 1
 
 	results = run_power_experiment(
