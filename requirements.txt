@@ -5,10 +5,6 @@ scikit-learn
 matplotlib
 seaborn
 
-# Deep learning (uncomment as needed)
-# torch
-# tensorflow
-
 # Utilities
 pandas
 tqdm
